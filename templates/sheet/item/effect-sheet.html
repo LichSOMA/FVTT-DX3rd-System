@@ -14,7 +14,7 @@
   <nav class="sheet-navigation sheet-tabs tabs" data-group="primary">
     <a class="item" data-tab="description">{{localize "DX3rd.Description" }}</a>
     <a class="item" data-tab="attributes">{{localize "DX3rd.Attributes" }}</a>
-    <a class="item" data-tab="skills">{{localize "DX3rd.Attributes"}} - {{localize "DX3rd.Skills"}}</a>
+    <a class="item" data-tab="skills">{{localize "DX3rd.Skills"}}</a>
     <a class="item" data-tab="target">{{localize "DX3rd.Target" }}</a>
   </nav>
 
@@ -124,6 +124,7 @@
               {{#select system.type}}
               <option value="normal">{{localize "DX3rd.Effect"}}</option>
               <option value="easy">{{localize "DX3rd.Easy"}}</option>
+              <option value="extra">{{localize "DX3rd.ExtraData"}}</option>
               {{/select}}
             </select>
 
@@ -264,6 +265,9 @@
                 <option value="social_value">{{localize "DX3rd.SocialValue"}}</option>
                 <option value="social_add">{{localize "DX3rd.SocialAdd"}}</option>
                 <option value="social_dice">{{localize "DX3rd.SocialDice"}}</option>
+
+                <option value="casting_dice">{{localize "DX3rd.CastingDice"}}</option>
+                <option value="casting_add">{{localize "DX3rd.CastingAdd"}}</option>
                 {{/select}}
               </select>
 
@@ -381,6 +385,7 @@
                 <option value="armor">{{localize "DX3rd.Armor"}}</option>
                 <option value="guard">{{localize "DX3rd.Guard"}}</option>
                 <option value="saving">{{localize "DX3rd.Saving"}}</option>
+                <option value="battleMove">{{localize "DX3rd.BattleMove"}}</option>
 
                 <option value="major_dice">{{localize "DX3rd.MajorDice"}}</option>
                 <option value="major">{{localize "DX3rd.MajorAdd"}}</option>
@@ -400,6 +405,9 @@
                 <option value="mind_dice">{{localize "DX3rd.MindDice"}}</option>
                 <option value="social_add">{{localize "DX3rd.SocialAdd"}}</option>
                 <option value="social_dice">{{localize "DX3rd.SocialDice"}}</option>
+
+                <option value="casting_dice">{{localize "DX3rd.CastingDice"}}</option>
+                <option value="casting_add">{{localize "DX3rd.CastingAdd"}}</option>
                 {{/select}}
               </select>
 

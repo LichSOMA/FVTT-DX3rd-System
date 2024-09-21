@@ -41,6 +41,7 @@ export class DX3rdActor extends Actor {
       "exp": { "value": 0 },
 
       "battleMove": { "value": 0 },
+      "fullMove": { "value": 0 },
 
       "major": { "value": 0 },
       "major_dice": { "value": 0 },
@@ -65,8 +66,17 @@ export class DX3rdActor extends Actor {
       "body_dice": { "value": 0 },
       "sense_dice": { "value": 0 },
       "mind_dice": { "value": 0 },
-      "social_dice": { "value": 0 }
+      "social_dice": { "value": 0 },
+
+      // 추가된 values
+      "casting_dice": { "value": 0 },
+      "casting_add": { "value": 0 }
+      //
     }
+    // 추가된 attributes
+    attributes.casting_dice = values.casting_dice;
+    attributes.casting_add = values.casting_add;
+    //
 
     let skills = attributes.skills;
     for (const [key, value] of Object.entries(skills)) {
@@ -78,6 +88,7 @@ export class DX3rdActor extends Actor {
     let syndrome = [];
     let effect = [];
     let combo = [];
+    let spell = [];
     let record = [];
     
     let itemType = ["weapon", "protect", "vehicle", "connection", "item"];
@@ -92,6 +103,8 @@ export class DX3rdActor extends Actor {
         effect.push(i);
       else if (i.type == 'combo' && i.system.active.state)
         combo.push(i);
+      else if (i.type == 'spell')
+        spell.push(i);
       else if (itemType.includes(i.type) && i.system.equipment)
         item.push(i);
       else if (i.type == 'record')
@@ -118,6 +131,14 @@ export class DX3rdActor extends Actor {
       "armor": { "value": 0 },
       "init": { "value": 0 }
     };
+
+    for (let s of spell) {
+      let sData = s.system;
+      for (let [key, value] of Object.entries(tmp))
+        if (key in sData)
+          tmp[key].value += sData[key];
+      values["exp"].value += sData.exp;
+    }
 
     for (let i of item) {
       let iData = i.system;
@@ -199,10 +220,19 @@ export class DX3rdActor extends Actor {
 
     values["init"].value += values['sense'].value * 2 + values['mind'].value;
     values["init"].value = (values["init"].value < 0) ? 0 : values["init"].value;
-    attributes.move.battle = values["init"].value + 5 + values["battleMove"].value;
-    attributes.move.full = (fullMove == 0) ? attributes.move.battle * 2 : fullMove;
+
+    attributes.move.battle = (values["init"].value + 5  + values["battleMove"].value > Math.floor(fullMove/5)) ? values["init"].value + 5  + values["battleMove"].value : Math.floor(fullMove/5);
+    if (attributes.move.battle < 0 ){
+      attributes.move.battle = 0
+    }
+
+    attributes.move.full = ((fullMove == 0) ? (values['init'].value + 5) * 2 + (values["battleMove"].value * 2) : fullMove) + values["fullMove"].value;
+    if (attributes.move.full < 0 ){
+      attributes.move.full = 0
+    }
 
     delete values["battleMove"];
+    delete values["fullMove"];
 
     for (let l of mainStat) {
       values[l].value += values[l + "_dice"].value;
@@ -747,7 +777,256 @@ export class DX3rdActor extends Actor {
     await this.update({ "system.attributes.sublimation.dice": 0, "system.attributes.sublimation.critical": 0 });
   }
 
+  // 마술 굴림 추가 //
+  async _onSpellRoll(diceOptions) {    
+    let mind = this.system.attributes.mind.value; // 술자의 【정신】 능력치
+    let will = this.system.attributes.skills.will.value; // 술자의 〈의지〉 기능
+    let cthulhu = this.system.attributes.skills.cthulhu.value; // 술자의 〈지식: 크툴루〉 기능
 
+    let castingDice = Math.floor((mind + will) / 2); // 마술 굴림 주사위 개수
+
+    let appendDice = this.system.attributes.casting_dice.value;
+    let appendAdd = this.system.attributes.casting_add.value;
+
+    let invoke = diceOptions.invoke;
+    let evocation = diceOptions.evocation;
+
+    let spelltype = diceOptions.spellType;
+
+    let invokeText = `${invoke}`;
+    if (diceOptions.spelltype === "Evocation" || diceOptions.spelltype === "EvocationRitual") {
+      invokeText = `${invoke}(${evocation})`
+    }
+
+    new Dialog({
+      title: game.i18n.localize("DX3rd.CastingRoll"),
+      content: `
+        <h2 style="text-align: center;">${game.i18n.localize("DX3rd.CastingDice")}: ${castingDice} / ${game.i18n.localize("DX3rd.Invoke")}: ${invokeText}</h2>
+        <table class="calc-dialog">
+          <tr>
+            <th style="white-space: nowrap;">${game.i18n.localize("DX3rd.AddDice").replace(' ', '<br>')}</th>
+            <td><input type="number" id="append-dice" value="${appendDice}" style="width: 100px;"></td>
+    
+            <th style="white-space: nowrap;">${game.i18n.localize("DX3rd.AddResult").replace(' ', '<br>')}</th>
+            <td><input type="number" id="append-add" value="${appendAdd}" style="width: 100px;"></td>
+          </tr>
+    
+          <tr>
+            <th style="white-space: nowrap;">${game.i18n.localize("DX3rd.Eibon").replace(' ', '<br>')}</th>
+            <td><input type="checkbox" id="eibon"></td>
+    
+            <th style="white-space: nowrap;">${game.i18n.localize("DX3rd.Angel").replace(' ', '<br>')}</th>
+            <td><input type="checkbox" id="angel"></td>
+          </tr>
+        </table>
+      `,
+      buttons: {
+        confirm: {
+          icon: '<i class="fas fa-check"></i>',
+          label: "Confirm",
+          callback: async () => {
+            let addDice = ($("#append-dice").val() != "") ? Number($("#append-dice").val()) : 0;
+            let addResult = ($("#append-add").val() != "") ? Number($("#append-add").val()) : 0;
+            let eibonDice = Math.floor(cthulhu / 4);
+    
+            // eibon 및 angel 체크박스 상태 확인
+            let isEibonChecked = $("#eibon").is(":checked");
+            let isAngelChecked = $("#angel").is(":checked");
+    
+            // 기본 주사위 계산
+            let totalDice = castingDice + addDice;
+            let formula = `${totalDice}d10 + ${addResult}`;
+            let roll = new Roll(formula);
+            await roll.evaluate({async: true});
+            let rollData = await roll.render();
+            let total = roll.total;
+    
+            // 모든 주사위 결과를 저장할 배열
+            let allDiceResults = roll.terms[0].results.map(r => r.result);
+    
+            // 10이 나온 주사위 처리
+            let extraDice = 0;
+            let tenResults = roll.terms[0].results.filter(r => r.result === 10);
+            extraDice += tenResults.length;
+    
+            while (extraDice > 0) {
+              let extraRoll = new Roll(`${extraDice}d10`);
+              await extraRoll.evaluate({async: true});
+              rollData += await extraRoll.render();
+              total += extraRoll.total;
+              // 추가 주사위 결과를 allDiceResults에 추가
+              allDiceResults = allDiceResults.concat(extraRoll.terms[0].results.map(r => r.result));
+              extraDice = extraRoll.terms[0].results.filter(r => r.result === 10).length;
+            }
+    
+            // 모든 추가 주사위 굴림이 완료된 후 Eibon 및 Angel 처리
+            if (isEibonChecked) {
+              await handleEibon(allDiceResults, eibonDice, isAngelChecked, invoke, addResult, rollData, total, roll);
+            } else if (isAngelChecked) {
+              await handleAngel(allDiceResults, invoke, addResult, rollData, total, roll);
+            } else {
+              DisplayResult(allDiceResults, total, invoke, evocation, rollData, roll, addResult, spelltype);
+            }
+          }
+        }
+      },
+      default: "confirm"
+    }).render(true);
+    
+    async function handleEibon(allDiceResults, eibonDice, isAngelChecked, invoke, addResult, rollData, total, roll) {
+      let content = "<div class='dice-grid' style='display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;'>";
+      allDiceResults.forEach((die, index) => {
+        content += `
+          <div style="display: grid; grid-template-columns: auto auto; align-items: center; justify-items: center; margin: 5px;">
+            <span>${die}</span>
+            <input type="checkbox" class="eibon-die" data-index="${index}">
+          </div>
+        `;
+      });
+      content += "</div>";
+    
+      await new Promise((resolve) => {
+        new Dialog({
+          title: `${game.i18n.localize("DX3rd.Eibon")}`,
+          content: `<p>Remove up to ${eibonDice} dice:</p>${content}`,
+          buttons: {
+            confirm: {
+              label: "Confirm",
+              callback: () => {
+                let selected = $(".eibon-die:checked").map((_, el) => $(el).data("index")).get();
+                if (selected.length > eibonDice) {
+                  ui.notifications.info(`You can only up to ${eibonDice}  die.`);
+                  handleEibon(allDiceResults, eibonDice, isAngelChecked, invoke, addResult, rollData, total, roll); // 다시 다이얼로그 표시
+                  return;
+                }
+                allDiceResults = allDiceResults.filter((_, index) => !selected.includes(index));
+                total = allDiceResults.reduce((sum, val) => sum + val, 0) + addResult;
+    
+                // Angel 처리
+                if (isAngelChecked) {
+                  handleAngel(allDiceResults, invoke, addResult, rollData, total, roll).then(resolve);
+                } else {
+                  DisplayResult(allDiceResults, total, invoke, evocation, rollData, roll, addResult, spelltype);
+                  resolve();
+                }
+              }
+            }
+          }
+        }).render(true);
+      });
+    }
+    
+    async function handleAngel(allDiceResults, invoke, addResult, rollData, total, roll) {
+      let tensDice = allDiceResults.filter(result => result === 10);
+    
+      if (tensDice.length > 0) {
+        let content = "<div class='dice-grid' style='display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;'>";
+        allDiceResults.forEach((die, index) => {
+          content += `
+            <div style="display: grid; grid-template-columns: auto auto; align-items: center; justify-items: center; margin: 5px;">
+              <span>${die}</span>
+              <input type="checkbox" class="angel-die" data-index="${index}">
+            </div>
+          `;
+        });
+        content += "</div>";
+    
+        await new Promise((resolve) => {
+          new Dialog({
+            title: `${game.i18n.localize("DX3rd.Angel")}`,
+            content: `<p>Remove up to 1 die (optional):</p>${content}`,
+            buttons: {
+              confirm: {
+                label: "Confirm",
+                callback: () => {
+                  let selected = $(".angel-die:checked").map((_, el) => $(el).data("index")).get();
+                  if (selected.length > 1) {
+                    ui.notifications.info("You can only remove up to 1 die.");
+                    handleAngel(allDiceResults, invoke, addResult, rollData, total, roll); // 다시 다이얼로그 표시
+                    return;
+                  }
+                  // 선택된 주사위만 제거
+                  allDiceResults = allDiceResults.filter((_, index) => !selected.includes(index));
+                  total = allDiceResults.reduce((sum, val) => sum + val, 0) + addResult;
+                  DisplayResult(allDiceResults, total, invoke, evocation, rollData, roll, addResult, spelltype);
+                  resolve();
+                }
+              }
+            }
+          }).render(true);
+        });
+      } else {
+        // Angel 체크박스가 있지만 10이 없는 경우
+        total = allDiceResults.reduce((sum, val) => sum + val, 0) + addResult;
+        DisplayResult(allDiceResults, total, invoke, evocation, rollData, roll, addResult, spelltype);
+      }
+    }
+    
+    // 결과를 평가하고 출력하는 함수
+    function DisplayResult(allDiceResults, total, invoke, evocation, rollData, roll, addResult, spelltype) {
+      let resultText = game.i18n.localize("DX3rd.Failure");
+
+      if ( total < invoke) {
+        resultText = game.i18n.localize("DX3rd.Failure");
+      } else {
+        if (!spelltype === "Evocation" || !spelltype === "EvocationRitual") {
+          resultText = game.i18n.localize("DX3rd.Success");
+        } else {
+          if (total >= evocation) {
+            resultText = `${game.i18n.localize("DX3rd.Evocation")} ${game.i18n.localize("DX3rd.Success")}`;
+          } else {
+            resultText = `${game.i18n.localize("DX3rd.Contact")} ${game.i18n.localize("DX3rd.Success")}`;
+          }
+        }
+      }
+    
+      // 남은 주사위 중 10이 나온 개수를 계산
+      let overflowDice = allDiceResults.filter(result => result === 10).length;
+      let overflowMessage = "";
+      if (overflowDice > 0) {
+        overflowMessage += `${game.i18n.localize("DX3rd.OverflowDice")}: ${overflowDice}개<br>`;
+        if (overflowDice === 1) {
+          overflowMessage += `${game.i18n.localize("DX3rd.SpellDisaster")}`;
+        } else if (overflowDice >= 2 && overflowDice <= 3) {
+          overflowMessage += `${game.i18n.localize("DX3rd.SpellCalamity")}`;
+        } else if (overflowDice >= 4) {
+          overflowMessage += `${game.i18n.localize("DX3rd.SpellCatastrophe")}`;
+        }
+      }
+    
+      // invoke와 같거나 크다면 매크로 실행
+      if (total >= invoke) {
+        const macro = game.macros.contents.find(m => (m.name === diceOptions.macro));
+        if (macro != undefined) {
+          macro.execute();
+        } else if (diceOptions.macro != "") {
+          new Dialog({
+            title: "macro",
+            content: `Do not find this macro: ${diceOptions.macro}`,
+            buttons: {}
+          }).render(true);
+        }
+      }
+    
+      let content = `
+        <div class="dx3rd-roll">
+          <h2 class="header"><div class="title">${game.i18n.localize("DX3rd.SpellResult")}: ${total}</div></h2>
+          ${resultText} (${game.i18n.localize("DX3rd.Invoke")}: ${invoke})<br>
+          ${overflowMessage}
+          ${rollData}
+        </div>
+      `;
+    
+      ChatMessage.create({
+        content: content,
+        type: CONST.CHAT_MESSAGE_TYPES.ROLL,
+        sound: CONFIG.sounds.dice,
+        roll: roll,
+      }, { rollMode: game.settings.get("core", "rollMode") });
+    }
+  }
+  //
+  
   /** @override */
   async modifyTokenAttribute(attribute, value, isDelta=false, isBar=true) {
     const current = foundry.utils.getProperty(this.system, attribute);
