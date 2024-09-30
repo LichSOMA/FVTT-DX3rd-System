@@ -14,6 +14,71 @@ export class DX3rdActor extends Actor {
     this._prepareActorSkills();
 
     this._prepareCombo();
+
+    this._prepareCondition();
+  }
+
+  _prepareCondition(){
+    if (!this.system.conditions) {
+      this.system.conditions = {
+        tainted: { value: "" },  // 객체로 정의
+        hatred: { target: "" },  // 객체로 정의
+        fear: { target: "" },    // 객체로 정의
+        berserk: { type: "-" }, // 객체로 정의
+
+        riger: false,
+        pressure: false,
+        dazed: false,
+
+        defeated: false,
+        action_end: false,
+        action_delay: false,
+        stealth: false,
+
+        lostHP: { value: "" },  // 객체로 정의
+        healing: { value: "" }  // 객체로 정의
+      };
+    }
+  
+    // boolean 상태와 객체 상태를 분리해서 관리
+    const conditions = this.system.conditions;
+  
+    // boolean 상태들은 false로 초기화
+    
+    conditions.riger = conditions.riger ?? false;
+    conditions.pressure = conditions.pressure ?? false;
+    conditions.dazed = conditions.dazed ?? false;
+
+    conditions.defeated = conditions.defeated ?? false;
+    conditions.action_end = conditions.action_end ?? false;
+    conditions.action_delay = conditions.action_delay ?? false;
+
+    conditions.stealth = conditions.stealth ?? false;
+  
+    // 객체 상태들은 올바르게 초기화
+    if (typeof conditions.tainted === "boolean") {
+      conditions.tainted = { value: "" }; // boolean 값이라면 객체로 변경
+    }
+  
+    if (typeof conditions.hatred === "boolean") {
+      conditions.hatred = { target: "" }; // boolean 값이라면 객체로 변경
+    }
+  
+    if (typeof conditions.fear === "boolean") {
+      conditions.fear = { target: "" }; // boolean 값이라면 객체로 변경
+    }
+  
+    if (typeof conditions.berserk === "boolean") {
+      conditions.berserk = { type: "-" }; // boolean 값이라면 객체로 변경
+    }
+
+    if (typeof conditions.lostHP === "boolean") {
+      conditions.lostHP = { value: "" }; // boolean 값이라면 객체로 변경
+    }
+
+    if (typeof conditions.healing === "boolean") {
+      conditions.healing = { value: "" }; // boolean 값이라면 객체로 변경
+    }
   }
 
   _prepareActorItem() {
@@ -83,6 +148,14 @@ export class DX3rdActor extends Actor {
     attributes.saving_max = values.saving_max;
     attributes.stock_point = values.stock_point;
     //
+
+    attributes.condition_dice = 0;
+    if (this.system.conditions.dazed?.active) {
+      attributes.condition_dice += 2;
+    }
+    if (this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "hunger") {
+      attributes.condition_dice += 5;
+    }
 
     let skills = attributes.skills;
     for (const [key, value] of Object.entries(skills)) {
@@ -277,13 +350,22 @@ export class DX3rdActor extends Actor {
     delete values.hp;
 
     values["init"].value += values["sense"].value * 2 + values["mind"].value;
+    if(this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "release") {
+      values["init"].value -= 999;
+    }
+    if(this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "delusion") {
+      values["init"].value -= 10;
+    }
     values["init"].value = values["init"].value < 0 ? 0 : values["init"].value;
 
     attributes.move.battle =
       values["init"].value + 5 + values["battleMove"].value >
-      Math.floor(fullMove / 5)
+        Math.floor(fullMove / 5)
         ? values["init"].value + 5 + values["battleMove"].value
         : Math.floor(fullMove / 5);
+    if (this.system.conditions.riger?.active) {
+      attributes.move.battle -= 999;
+    }
     if (attributes.move.battle < 0) {
       attributes.move.battle = 0;
     }
@@ -292,6 +374,9 @@ export class DX3rdActor extends Actor {
       (fullMove == 0
         ? (values["init"].value + 5) * 2 + values["battleMove"].value * 2
         : fullMove) + values["fullMove"].value;
+    if (this.system.conditions.riger?.active) {
+      attributes.move.full -= 999;
+    }
     if (attributes.move.full < 0) {
       attributes.move.full = 0;
     }
@@ -740,7 +825,8 @@ export class DX3rdActor extends Actor {
     dice +=
       Number(attributes.dice.value || 0) +
       Number(attributes.encroachment.dice || 0) +
-      Number(attributes.sublimation.dice || 0);
+      Number(attributes.sublimation.dice || 0) -
+      Number(attributes.condition_dice || 0);
     add += Number(attributes.add.value || 0);
     let critical = attributes.critical.value || 10;
 
@@ -792,6 +878,37 @@ export class DX3rdActor extends Actor {
         </table><script>$("#roll-dice").focus()</script>
     `;
 
+    // 현재 선택된 타겟들 가져오기
+    const selectedTargets = Array.from(game.user.targets || []);
+
+    if (this.system.conditions.fear?.active && selectedTargets.length > 0) {
+
+      // 선택된 타겟 중 fear.target과 이름이 같은 타겟이 있는지 확인
+      const isTargetMatched = selectedTargets.some(target => target.actor?.name === this.system.conditions.fear.target);
+
+      content += `
+          <table style="text-align: center;">
+            <tr>
+              <th>${game.i18n.localize("DX3rd.Condition")}: ${game.i18n.localize("DX3rd.UrgeFear")}</th>
+              <th>${game.i18n.localize("DX3rd.Target")}: ${this.system.conditions.fear.target}</th>
+              <td><input type="checkbox" id="fear" ${isTargetMatched ? "checked" : ""}></td>
+            </tr>
+          </table>
+          `;
+    }
+    
+    if (this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "distaste") {
+      content += `
+          <table style="text-align: center;">
+            <tr>
+              <th>${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeDistaste")}</th>
+              <th></th>
+              <td><input type="checkbox" id="distaste"></td>
+            </tr>
+          </table>
+          `
+    }
+
     // updateOptions 함수에서 다이얼로그 입력값을 diceOptions에 반영
     let updateOptions = () => {
       // NaN 처리 및 값 반영
@@ -799,6 +916,15 @@ export class DX3rdActor extends Actor {
       diceOptions.critical =
         Number($("#roll-critical").val()) || diceOptions.critical;
       diceOptions.add = Number($("#roll-add").val()) || diceOptions.add;
+
+      diceOptions.fearChecked = $("#fear").is(":checked");  // fear 체크 상태 저장
+      if (diceOptions.fearChecked) {
+        diceOptions.dice -= 2;  // fear 체크 시 주사위 -2 적용
+      }
+
+      if ($("#distaste").is(":checked")) {
+        diceOptions.add -= 10;
+      }
     };
 
     // 버튼 생성
@@ -867,7 +993,7 @@ export class DX3rdActor extends Actor {
     let rollMode = game.settings.get("core", "rollMode");
     let rollData = await roll.render();
     let content = `
-      <div class="dx3rd-roll" data-actor-id=${this.id}>
+      <div class="dx3rd-roll">
         <h2 class="header"><div class="title">${title}(${game.i18n.localize(`DX3rd.${rollType.charAt(0).toUpperCase() + rollType.slice(1)}`)})</div></h2>
         ${rollData}
       </div>
@@ -876,7 +1002,7 @@ export class DX3rdActor extends Actor {
     // attack 버튼에서 추가 기능이 필요한 경우 처리
     if ("attack" in diceOptions) {
       let attack = Number(attributes.attack.value) + diceOptions.attack.value;
-      content += `<button class="chat-btn calc-damage" data-attack="${attack}" data-damage="${attributes.attack.dice}">${game.i18n.localize(
+      content += `<button class="chat-btn calc-damage" data-attack="${attack}" data-damage="${attributes.attack.dice}" data-fear="${diceOptions.fearChecked?-2:0}" data-actorid="${this.id}">${game.i18n.localize(
         "DX3rd.DamageRoll"
       )}</button>`;
     }
@@ -1340,3 +1466,22 @@ export class DX3rdActor extends Actor {
     return allowed !== false ? this.update(updates) : this;
   }
 }
+
+// 변이폭주: 흡혈 자동화 //
+
+Hooks.on("preUpdateActor", async (actor, updateData) => {
+  // 조건: berserk 상태가 활성화되어 있고, berserk의 타입이 bloodsucking인 경우
+  if (actor.system.conditions.berserk?.active && actor.system.conditions.berserk.type === "bloodsucking") {
+    // HP 변동이 있는지 확인
+    if (updateData.system?.attributes?.hp?.value !== undefined) {
+      const currentHP = actor.system.attributes.hp.value;
+      const newHP = updateData.system.attributes.hp.value;
+      
+      // HP가 상승했을 경우 이를 방지 (현재 HP보다 새로운 HP가 높을 때)
+      if (newHP > currentHP) {
+        updateData.system.attributes.hp.value = currentHP; // HP 변동을 막음
+        ui.notifications.info("HP cannot increase while in Berserk: Bloodsucking.");
+      }
+    }
+  }
+});

@@ -30,16 +30,6 @@ Hooks.once("init", async function () {
     // 기본 상태이상 초기화
     CONFIG.statusEffects = [];
 
-    // 새로운 상태이상 추가
-    CONFIG.statusEffects.push({
-      id: "berserk",
-      label: "Berserk",
-      icon: "icons/svg/eye.svg",
-      changes: [],
-      duration: { rounds: 1 },
-      flags: { "dx3rd": { customCondition: true } }
-    });
-
   // CONFIG.debug.hooks = true;
   console.log(`Initializing Double Cross 3rd System`);
 
@@ -718,17 +708,20 @@ async function chatListeners(html) {
   html.on("click", ".calc-damage", async (ev) => {
     ev.preventDefault();
     const data = ev.currentTarget.dataset;
+
+    const actorId = data.actorid;
+    const actor = game.actors.get(actorId);
+
     const attack = Number(data.attack);
     const damage = Number(data.damage);
+    const fear = Number(data.fear)
+
     const rollResult = Number(
       $(ev.currentTarget).parent().find(".dice-total").first().text()
     );
 
-    new Dialog({
-      title: game.i18n.localize("DX3rd.CalcDamage"),
-      content: `
+    let content = `
             <h2 style="text-align: center;">[${rollResult} / 10 + 1 + ${damage}]D10 + ${attack}</h2>
-
             <table class="calc-dialog">
               <tr>
                 <th>${game.i18n.localize("DX3rd.IgnoreArmor")}</th>
@@ -744,9 +737,24 @@ async function chatListeners(html) {
                 <th>${game.i18n.localize("DX3rd.AddDamage")}</th>
                 <td colspan="5"><input type="number" id="add-damage"></td>
               </tr>
+            </table>   
+    `
 
-            </table>
-        `,
+    if (actor.system.conditions.berserk?.active && actor.system.conditions.berserk.type === "tourture") {
+      content += `
+          <table style="text-align: center;">
+            <tr>
+              <th>${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeTourture")}</th>
+              <th></th>
+              <td><input type="checkbox" id="tourture" "checked"></td>
+            </tr>
+          </table>
+          `
+    }
+
+    new Dialog({
+      title: game.i18n.localize("DX3rd.CalcDamage"),
+      content: content,
       buttons: {
         confirm: {
           icon: '<i class="fas fa-check"></i>',
@@ -760,8 +768,13 @@ async function chatListeners(html) {
             let addDice =
               $("#add-dice").val() != "" ? Number($("#add-dice").val()) : 0;
             let formula = `${
-              parseInt((rollResult + addResult) / 10) + 1 + damage + addDice
+              parseInt((rollResult + addResult) / 10) + 1 + damage + addDice + fear
             }d10 + ${attack + addDamage}`;
+            if ($("#tourture").is(":checked")) {
+              formula = `${
+                parseInt((rollResult + addResult) / 10) + 1 + damage + addDice + fear
+              }d10 + ${attack + addDamage - 20}`;
+            }
 
             let roll = new Roll(formula);
             await roll.roll({ async: true });
@@ -936,4 +949,285 @@ Hooks.on("enterScene", (actor) => {
   });
 
   enterDialog.render(true);
+});
+
+Hooks.on("createActiveEffect", async (effect, options, userId) => {
+  let actor = effect.parent;  // 상태이상이 적용된 액터
+  let condition = effect.data.flags?.dx3rd?.statusId;
+
+  // 상태이상의 label이 "DX3rd.Berserk"인 경우에만 처리
+  if (condition === "berserk") {
+      // 상태이상을 생성한 유저에 해당하는지 확인
+      if (actor && game.user.id === userId) {
+          let options = [
+              { value: "normal", label: game.i18n.localize("DX3rd.Normal") },
+              { value: "release", label: game.i18n.localize("DX3rd.UrgeRelease") },
+              { value: "hunger", label: game.i18n.localize("DX3rd.UrgeHunger") },
+              { value: "bloodsucking", label: game.i18n.localize("DX3rd.UrgeBloodsucking") },
+              { value: "slaughter", label: game.i18n.localize("DX3rd.UrgeSlaughter") },
+              { value: "destruction", label: game.i18n.localize("DX3rd.UrgeDestruction") },
+              { value: "tourture", label: game.i18n.localize("DX3rd.UrgeTourture") },
+              { value: "distaste", label: game.i18n.localize("DX3rd.UrgeDistaste") },
+              { value: "battlelust", label: game.i18n.localize("DX3rd.UrgeBattlelust") },
+              { value: "delusion", label: game.i18n.localize("DX3rd.UrgeDelusion") },
+              { value: "selfmutilation", label: game.i18n.localize("DX3rd.UrgeSelfmutilation") },
+              { value: "fear", label: game.i18n.localize("DX3rd.UrgeFear") },
+              { value: "hatred", label: game.i18n.localize("DX3rd.UrgeHatred") }
+          ];
+
+          // 옵션 생성
+          let optionElements = options.map(option => `<option value="${option.value}">${option.label}</option>`).join("");
+
+          // 다이얼로그 생성 (드롭다운을 통해 타입 선택)
+          new Dialog({
+              title: game.i18n.localize("DX3rd.Berserk"),
+              content: `
+            <style>
+              #berserk-type {
+                width: 100%; /* 셀렉트 박스의 너비를 100%로 설정하여 다이얼로그에 맞춤 */
+              }
+            </style>
+            <p>Select the type:</p>
+            <select id="berserk-type">
+              ${optionElements}  <!-- 자바스크립트로 생성된 옵션들 삽입 -->
+            </select>
+            <hr>`,
+              buttons: {
+                  ok: {
+                      label: "OK",
+                      callback: async (html) => {
+                          // 선택된 타입 가져오기
+                          const selectedType = html.find("#berserk-type").val();
+                          // 선택된 타입을 actor의 conditions에 업데이트
+                          if (selectedType === "selfmutilation") {
+                              const currentHP = actor.system.attributes.hp.value;
+                              const afterHP = currentHP - 5;
+                              if (afterHP < 0) {
+                                  afterHP === 0;
+                              }
+                              await actor.update({ "system.attributes.hp.value": afterHP })
+                              const effect = actor.effects.find(e => e.data.label === `${game.i18n.localize("DX3rd.Berserk")}`);
+
+                              if (effect) {
+                                  // 'berserk' 상태가 이미 있을 경우 제거
+                                  await effect.delete();
+                                  console.log(`Removed berserk from token: ${actor.name}`);
+                              }
+                          } else if (selectedType === "fear") {
+                              await actor.update({
+                                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
+                                  "system.conditions.berserk.active": true         // 상태 활성화
+                              });
+
+                              const effectData = {
+                                  id: "riger",
+                                  label: game.i18n.localize("DX3rd.Riger"),
+                                  icon: "icons/svg/lightning.svg", // 아이콘 경로
+                                  disabled: false,
+                                  duration: { rounds: 9999 }, // 지속 시간 설정 (라운드 단위)
+                                  flags: { "dx3rd": { statusId: "riger" } }
+                              };
+
+                              // 새로운 상태이상 적용
+                              await actor.createEmbeddedDocuments("ActiveEffect", [effectData]);
+                              console.log(`Applied berserk to token: ${actor.name}`);
+                          } else {
+                              await actor.update({
+                                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
+                                  "system.conditions.berserk.active": true         // 상태 활성화
+                              });
+                          }
+                      }
+                  },
+                  cancel: {
+                      label: "Cancel",
+                      callback: async () => {
+                          await effect.delete();  // 상태이상 적용 취소
+                      }
+                  }
+              }
+          }).render(true);
+      }
+  }
+
+  // 상태이상의 label이 "DX3rd.Tainted"인 경우에만 처리
+  else if (condition === "tainted") {
+      // 상태이상을 생성한 유저에 해당하는지 확인
+      if (actor && game.user.id === userId) {
+          // 다이얼로그 생성 (userId에 대응하는 사용자에게만 띄움)
+          new Dialog({
+              title: game.i18n.localize("DX3rd.Tainted"),
+              content: `<p>Input the rank:</p><input type="text" id="tainted-value" />`,
+              buttons: {
+                  ok: {
+                      label: "OK",
+                      callback: async (html) => {
+                          const inputValue = html.find("#tainted-value").val();  // 입력된 값 가져오기
+                          await actor.update({
+                              "system.conditions.tainted.value": inputValue,  // 입력값 저장
+                              "system.conditions.tainted.active": true        // 상태 활성화
+                          });
+                      }
+                  },
+                  cancel: {
+                      label: "Cancel",
+                      callback: async () => {
+                          await effect.delete();  // 상태이상 적용 취소
+                      }
+                  }
+              }
+          }).render(true);
+      }
+  }
+
+  // 상태이상의 label이 "DX3rd.Hatred"인 경우에만 처리
+  else if (condition === "hatred") {
+      // 상태이상을 생성한 유저에 해당하는지 확인
+      if (actor && game.user.id === userId) {
+          // 현재 토큰을 제외한 다른 토큰들의 리스트 생성
+          let otherTokens = canvas.tokens.placeables.filter(token => token.actor && token.actor.id !== actor.id);
+          let tokenOptions = otherTokens.map(token => `<option value="${token.actor.name}">${token.actor.name}</option>`).join("");
+
+          // 다이얼로그 생성 (드롭다운을 통해 토큰 선택)
+          new Dialog({
+              title: game.i18n.localize("DX3rd.Hatred"),
+              content: `
+        <style>
+          #hatred-target {
+            width: 100%; /* 셀렉트 박스의 너비를 100%로 설정하여 다이얼로그에 맞춤 */
+          }
+        </style>
+        <p>Select the target:</p>
+        <select id="hatred-target">${tokenOptions}</select>
+        <hr>`,
+              buttons: {
+                  ok: {
+                      label: "OK",
+                      callback: async (html) => {
+                          // 선택된 토큰 이름 가져오기
+                          const selectedTokenName = html.find("#hatred-target").val();
+                          // 선택된 토큰의 이름을 actor의 conditions에 업데이트
+                          await actor.update({
+                              "system.conditions.hatred.target": selectedTokenName,  // 선택한 토큰 이름 저장
+                              "system.conditions.hatred.active": true                // 상태 활성화
+                          });
+                      }
+                  },
+                  cancel: {
+                      label: "Cancel",
+                      callback: async () => {
+                          await effect.delete();  // 상태이상 적용 취소
+                      }
+                  }
+              }
+          }).render(true);
+      }
+  }
+
+  // 상태이상의 label이 "DX3rd.Fear"인 경우에만 처리
+  else if (condition === "fear") {
+      // 상태이상을 생성한 유저에 해당하는지 확인
+      if (actor && game.user.id === userId) {
+          // 현재 토큰을 제외한 다른 토큰들의 리스트 생성
+          let otherTokens = canvas.tokens.placeables.filter(token => token.actor && token.actor.id !== actor.id);
+          let tokenOptions = otherTokens.map(token => `<option value="${token.actor.name}">${token.actor.name}</option>`).join("");
+
+          // 다이얼로그 생성 (드롭다운을 통해 토큰 선택)
+          new Dialog({
+              title: game.i18n.localize("DX3rd.Fear"),
+              content: `
+        <style>
+          #fear-target {
+            width: 100%; /* 셀렉트 박스의 너비를 100%로 설정하여 다이얼로그에 맞춤 */
+          }
+        </style>
+        <p>Select the target:</p>
+        <select id="fear-target">${tokenOptions}</select>
+        <hr>`,
+              buttons: {
+                  ok: {
+                      label: "OK",
+                      callback: async (html) => {
+                          // 선택된 토큰 이름 가져오기
+                          const selectedTokenName = html.find("#fear-target").val();
+                          // 선택된 토큰의 이름을 actor의 conditions에 업데이트
+                          await actor.update({
+                              "system.conditions.fear.target": selectedTokenName,  // 선택한 토큰 이름 저장
+                              "system.conditions.fear.active": true                // 상태 활성화
+                          });
+                      }
+                  },
+                  cancel: {
+                      label: "Cancel",
+                      callback: async () => {
+                          await effect.delete();  // 상태이상 적용 취소
+                      }
+                  }
+              }
+          }).render(true);
+      }
+  }
+
+  // 나머지 상태이상 처리
+  else {
+      await actor.update({
+          [`system.conditions.${condition}.active`]: true
+      });
+  }
+});
+
+Hooks.on("deleteActiveEffect", async (effect) => {
+  let actor = effect.parent;  // 상태이상이 해제된 액터
+  let condition = effect.data.flags?.dx3rd?.statusId; // 상태이상 확인
+
+  // 상태이상의 label이 "DX3rd.Berserk"인 경우에만 처리
+  if (condition === "berserk") {
+    if (actor) {
+      // 상태 해제 시 값을 null로 설정
+      await actor.update({
+        "system.conditions.berserk.active": false,
+        "system.conditions.berserk.type": "-"
+      });
+    }
+  }
+
+  // 상태이상의 label이 "DX3rd.Tainted"인 경우에만 처리
+  else if (condition === "tainted") {
+    if (actor) {
+      // 상태 해제 시 값을 null로 설정
+      await actor.update({
+        "system.conditions.tainted.active": false,
+        "system.conditions.tainted.value": null
+      });
+    }
+  }
+
+  // 상태이상의 label이 "DX3rd.Hatred"인 경우에만 처리
+  else if (condition === "hatred") {
+    if (actor) {
+      // 상태 해제 시 값을 null로 설정
+      await actor.update({
+        "system.conditions.hatred.active": false,
+        "system.conditions.hatred.target": null
+      });
+    }
+  }
+
+  // 상태이상의 label이 "DX3rd.Fear"인 경우에만 처리
+  else if (condition === "fear") {
+    if (actor) {
+      // 상태 해제 시 값을 null로 설정
+      await actor.update({
+        "system.conditions.fear.active": false,
+        "system.conditions.fear.target": null
+      });
+    }
+  }
+
+  // 나머지 상태이상 처리
+  else {
+    await actor.update({
+      [`system.conditions.${condition}.active`]: false
+    });
+  }
 });
