@@ -27,8 +27,99 @@ import { DX3rdCombat } from "./combat.js";
  */
 Hooks.once("init", async function () {
 
-    // 기본 상태이상 초기화
-    CONFIG.statusEffects = [];
+  // 기본 상태이상 초기화
+  CONFIG.statusEffects = [];
+
+  // 새로운 상태이상 추가
+  CONFIG.statusEffects.push({
+    id: "berserk",
+    label: game.i18n.localize("DX3rd.Berserk"),
+    icon: "icons/svg/pawprint.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "berserk" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "riger",
+    label: game.i18n.localize("DX3rd.Riger"),
+    icon: "icons/svg/lightning.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "riger" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "pressure",
+    label: game.i18n.localize("DX3rd.Pressure"),
+    icon: "icons/svg/net.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "pressure" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "dazed",
+    label: game.i18n.localize("DX3rd.Dazed"),
+    icon: "icons/svg/daze.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "dazed" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "tainted",
+    label: game.i18n.localize("DX3rd.Tainted"),
+    icon: "icons/svg/acid.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "tainted" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "hatred",
+    label: game.i18n.localize("DX3rd.Hatred"),
+    icon: "icons/svg/fire.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "hatred" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "fear",
+    label: game.i18n.localize("DX3rd.Fear"),
+    icon: "icons/svg/stoned.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "fear" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "fly",
+    label: game.i18n.localize("DX3rd.Fly"),
+    icon: "icons/svg/wing.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "fly" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "stealth",
+    label: game.i18n.localize("DX3rd.Stealth"),
+    icon: "icons/svg/blind.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "stealth" } }
+  });
+
+  CONFIG.statusEffects.push({
+    id: "boarding",
+    label: game.i18n.localize("DX3rd.Boarding"),
+    icon: "icons/svg/target.svg",
+    disabled: false,
+    duration: { rounds: 9999 },
+    flags: { "dx3rd": { statusId: "boarding" } }
+  });
 
   // CONFIG.debug.hooks = true;
   console.log(`Initializing Double Cross 3rd System`);
@@ -323,11 +414,31 @@ async function chatListeners(html) {
     });
   }
 
+  // 채팅창에 호출된 effect 아이템의 사용 버튼을 누를 경우 실행되는 기능 구현 //
   html.on("click", ".use-effect", async (ev) => {
     ev.preventDefault();
     const itemInfo = ev.currentTarget.closest(".dx3rd-item-info");
     const actor = game.actors.get(itemInfo.dataset.actorId);
     const item = actor.items.get(itemInfo.dataset.itemId);
+
+    // 상태이상: 중압에 의한 오토액션 불가 //
+    const timing = item.system.timing;
+    if (actor.system.conditions.pressure?.active && timing === "auto") {
+      ui.notifications.info(`You cannot use auto action while in pressure.`);
+      return;
+    }
+
+    const berserkActive = actor.system.conditions.berserk?.active;
+    const berserkType = actor.system.conditions.berserk?.type;
+
+    // 상태이상: 폭주에 의한 리액션 불가 //
+    const isUnableReaction = berserkActive &&
+      ["normal", "slaughter", "battlelust", "delusion", "hatred"].includes(berserkType);
+
+    if (isUnableReaction && timing === "reaction") {
+      ui.notifications.info(`You cannot use reaction while in berserk.`);
+      return;  // 조건이 만족되면 기능 실행 중단
+    }
 
     let skill = item.system.skill;
     let base = "";
@@ -366,47 +477,101 @@ async function chatListeners(html) {
       }
     }
 
-    Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+      .filter(target => target.actor?.system.conditions.stealth?.active)
+      .map(target => target.actor?.name);
 
-    usingEffect(item);
-    runningMacro(item.system.macro, actor, item);
-    if (item.system.effect.disable != "-") {
-      for (let target of targets.map((t) => t.actor))
-        await item.applyTarget(target);
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+          <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+          <ul>
+            ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+          </ul>
+          <hr>
+        `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
     }
 
-    Hooks.call("updateActorCost", actor, item.id, "target");
-    
-    if (rollType === "-")
-      Hooks.call("updateActorCost", actor, item.id, "roll");
-    else {
-      const diceOptions = {
-        key: item.id,
-        rollType: rollType,
-        base: base,
-        skill: skill,
-      };  
+    const runAction = async() => {
+      Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
 
-      if (attackRoll == "-") {
-        await actor.rollDice(item.name, diceOptions);
-      } else {
-        let confirm = async (weaponData) => {
-          diceOptions["attack"] = {
-            value: weaponData.attack,
-            type: item.system.attackRoll,
-          };
+      usingEffect(item);
+      runningMacro(item.system.macro, actor, item);
+      if (item.system.effect.disable != "-") {
+        for (let target of targets.map((t) => t.actor))
+          await item.applyTarget(target);
+      }
+  
+      Hooks.call("updateActorCost", actor, item.id, "target");
+      
+      if (rollType === "-")
+        Hooks.call("updateActorCost", actor, item.id, "roll");
+      else {
+        const diceOptions = {
+          key: item.id,
+          rollType: rollType,
+          base: base,
+          skill: skill,
+        };  
+  
+        if (attackRoll == "-") {
           await actor.rollDice(item.name, diceOptions);
-        };
-        new WeaponDialog(actor, confirm).render(true);
+        } else {
+          let confirm = async (weaponData) => {
+            diceOptions["attack"] = {
+              value: weaponData.attack,
+              type: item.system.attackRoll,
+            };
+            await actor.rollDice(item.name, diceOptions);
+          };
+          new WeaponDialog(actor, confirm).render(true);
+        }
       }
     }
   });
 
+  // 채팅창에 호출된 combo 아이템의 사용 버튼을 누를 경우 실행되는 기능 구현 //
   html.on("click", ".use-combo", async (ev) => {
     ev.preventDefault();
     const itemInfo = ev.currentTarget.closest(".dx3rd-item-info");
     const actor = game.actors.get(itemInfo.dataset.actorId);
     const item = actor.items.get(itemInfo.dataset.itemId);
+
+    // 상태이상: 중압에 의한 오토액션 불가 //
+    const timing = item.system.timing;
+    if (actor.system.conditions.pressure?.active && timing === "auto") {
+      ui.notifications.info(`You cannot use auto action while in pressure.`);
+      return;
+    }
+
+    const berserkActive = actor.system.conditions.berserk?.active;
+    const berserkType = actor.system.conditions.berserk?.type;
+
+    // 상태이상: 폭주에 의한 리액션 불가 //
+    const isUnableReaction = berserkActive &&
+      ["normal", "slaughter", "battlelust", "delusion", "hatred"].includes(berserkType);
+
+    if (isUnableReaction && timing === "reaction") {
+      ui.notifications.info(`You cannot use reaction while in berserk.`);
+      return;  // 조건이 만족되면 기능 실행 중단
+    }
 
     const skill = item.system.skill;
     const base = item.system.base;
@@ -448,70 +613,102 @@ async function chatListeners(html) {
       }
     }
 
-    // 효과와 매크로 실행
-    for (let e of effectItems) {
-      if (e === "-") continue;
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+      .filter(target => target.actor?.system.conditions.stealth?.active)
+      .map(target => target.actor?.name);
 
-      let effect = actor.items.get(e);
-      if (effect.system.effect.disable != "-") {
-        for (let target of targets.map((t) => t.actor))
-          await effect.applyTarget(target);
-      }
-      
-      if (effect.system.macro !== "")
-        await runningMacro(effect.system.macro);
-
-      await usingEffect(effect);
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+          <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+          <ul>
+            ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+          </ul>
+          <hr>
+        `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
     }
 
-    Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
-    
-    await usingEffect(item);
-    await runningMacro(item.system.macro, actor, item);
+    const runAction = async () => {
+      // 효과와 매크로 실행
+      for (let e of effectItems) {
+        if (e === "-") continue;
 
-    Hooks.call("updateActorCost", actor, item.id, "target");
+        let effect = actor.items.get(e);
+        if (effect.system.effect.disable != "-") {
+          for (let target of targets.map((t) => t.actor))
+            await effect.applyTarget(target);
+        }
 
-    if (rollType === "-")
-      Hooks.call("updateActorCost", actor, item.id, "roll");
-    else {
-      const diceOptions = {
-        key: item.id,
-        rollType: rollType,
-        base: base,
-        skill: skill,
-      };  
+        if (effect.system.macro !== "")
+          await runningMacro(effect.system.macro);
 
-      if (attackRoll == "-") {
-        await actor.rollDice(item.name, diceOptions);
-      } else {
-        if (item.system.weaponSelect) {
-          let confirm = async (weaponData) => {
-            diceOptions["attack"] = {
-              value: weaponData.attack,
-              type: item.system.attackRoll,
-            };
-            await actor.rollDice(item.name, diceOptions);
-          };
-          new WeaponDialog(actor, confirm).render(true);
+        await usingEffect(effect);
+      }
 
-        } else {
-          const weaponItems = Object.values(item.system.weaponItems);
-          let attack = await weaponItems.reduce(
-            (acc, v) => acc + v.system.attack,
-            0
-          );
+      Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
 
-          diceOptions["attack"] = {
-            value: attack,
-            type: attackRoll,
-          };
+      await usingEffect(item);
+      await runningMacro(item.system.macro, actor, item);
 
+      Hooks.call("updateActorCost", actor, item.id, "target");
+
+      if (rollType === "-")
+        Hooks.call("updateActorCost", actor, item.id, "roll");
+      else {
+        const diceOptions = {
+          key: item.id,
+          rollType: rollType,
+          base: base,
+          skill: skill,
+        };
+
+        if (attackRoll == "-") {
           await actor.rollDice(item.name, diceOptions);
+        } else {
+          if (item.system.weaponSelect) {
+            let confirm = async (weaponData) => {
+              diceOptions["attack"] = {
+                value: weaponData.attack,
+                type: item.system.attackRoll,
+              };
+              await actor.rollDice(item.name, diceOptions);
+            };
+            new WeaponDialog(actor, confirm).render(true);
+
+          } else {
+            const weaponItems = Object.values(item.system.weaponItems);
+            let attack = await weaponItems.reduce(
+              (acc, v) => acc + v.system.attack,
+              0
+            );
+
+            diceOptions["attack"] = {
+              value: attack,
+              type: attackRoll,
+            };
+
+            await actor.rollDice(item.name, diceOptions);
+          }
         }
       }
     }
-
-
   });
 
   // 채팅창에 호출된 spell 아이템의 사용 버튼을 누를 경우 실행되는 기능 구현 //
@@ -542,36 +739,89 @@ async function chatListeners(html) {
       }
     }
 
-    Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+        .filter(target => target.actor?.system.conditions.stealth?.active)
+        .map(target => target.actor?.name);
 
-    usingEffect(item);
-
-    Hooks.call("updateActorCost", actor, item.id, "target");
-    
-    if (rollType === "-") {
-      runningMacro(item.system.macro, actor, item);
-      Hooks.call("updateActorCost", actor, item.id, "roll");
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+      <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+      <ul>
+        ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+      </ul>
+      <hr>
+    `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
     } else {
-      const diceOptions = {
-        key: item.id,
-        rollType: rollType,
-        spelltype: spellType,
-        invoke: invoke,
-        evocation: evocation,
-        macro: macroName,
-        item: item,
-      };
-
-      await actor._onSpellRoll(diceOptions);
+      runAction()
     }
 
+    const runAction = async () => { 
+      Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
+
+      usingEffect(item);
+  
+      Hooks.call("updateActorCost", actor, item.id, "target");
+      
+      if (rollType === "-") {
+        runningMacro(item.system.macro, actor, item);
+        Hooks.call("updateActorCost", actor, item.id, "roll");
+      } else {
+        const diceOptions = {
+          key: item.id,
+          rollType: rollType,
+          spelltype: spellType,
+          invoke: invoke,
+          evocation: evocation,
+          macro: macroName,
+          item: item,
+        };
+  
+        await actor._onSpellRoll(diceOptions);
+      }
+    }
   });
 
+  // 채팅창에 호출된 psionic 아이템의 사용 버튼을 누를 경우 실행되는 기능 구현 //
   html.on("click", ".use-psionic", async (ev) => {
     ev.preventDefault();
     const itemInfo = ev.currentTarget.closest(".dx3rd-item-info");
     const actor = game.actors.get(itemInfo.dataset.actorId);
     const item = actor.items.get(itemInfo.dataset.itemId);
+
+    // 상태이상: 중압에 의한 오토액션 불가 //
+    const timing = item.system.timing;
+    if (actor.system.conditions.pressure?.active && timing === "auto") {
+      ui.notifications.info(`You cannot use auto action while in pressure.`);
+      return;
+    }
+
+    const berserkActive = actor.system.conditions.berserk?.active;
+    const berserkType = actor.system.conditions.berserk?.type;
+
+    // 상태이상: 폭주에 의한 리액션 불가 //
+    const isUnableReaction = berserkActive &&
+      ["normal", "slaughter", "battlelust", "delusion", "hatred"].includes(berserkType);
+
+    if (isUnableReaction && timing === "reaction") {
+      ui.notifications.info(`You cannot use reaction while in berserk.`);
+      return;  // 조건이 만족되면 기능 실행 중단
+    }
 
     let skill = item.system.skill;
     let base = "";
@@ -640,69 +890,153 @@ async function chatListeners(html) {
       }
     }
 
-    Hooks.call("setActorCost", actor, item.id, "hp", hp);
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+        .filter(target => target.actor?.system.conditions.stealth?.active)
+        .map(target => target.actor?.name);
 
-    usingEffect(item);
-    runningMacro(item.system.macro, actor, item);
-    if (item.system.effect.disable != "-") {
-      for (let target of targets.map((t) => t.actor))
-        await item.applyTarget(target);
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+      <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+      <ul>
+        ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+      </ul>
+      <hr>
+    `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
     }
 
-    Hooks.call("updateActorCost", actor, item.id, "target");
-    
-    if (rollType === "-")
-      Hooks.call("updateActorCost", actor, item.id, "roll");
-    else {
-      const diceOptions = {
-        key: item.id,
-        rollType: rollType,
-        base: base,
-        skill: skill,
-      };  
+    const runAction = async () => { 
+      Hooks.call("setActorCost", actor, item.id, "hp", hp);
 
-      if (attackRoll == "-") {
-        await actor.rollDice(item.name, diceOptions);
-      } else {
-        let confirm = async (weaponData) => {
-          diceOptions["attack"] = {
-            value: weaponData.attack,
-            type: item.system.attackRoll,
-          };
+      usingEffect(item);
+      runningMacro(item.system.macro, actor, item);
+      if (item.system.effect.disable != "-") {
+        for (let target of targets.map((t) => t.actor))
+          await item.applyTarget(target);
+      }
+  
+      Hooks.call("updateActorCost", actor, item.id, "target");
+      
+      if (rollType === "-")
+        Hooks.call("updateActorCost", actor, item.id, "roll");
+      else {
+        const diceOptions = {
+          key: item.id,
+          rollType: rollType,
+          base: base,
+          skill: skill,
+        };  
+  
+        if (attackRoll == "-") {
           await actor.rollDice(item.name, diceOptions);
-        };
-        new WeaponDialog(actor, confirm).render(true);
+        } else {
+          let confirm = async (weaponData) => {
+            diceOptions["attack"] = {
+              value: weaponData.attack,
+              type: item.system.attackRoll,
+            };
+            await actor.rollDice(item.name, diceOptions);
+          };
+          new WeaponDialog(actor, confirm).render(true);
+        }
       }
     }
   });
 
-
-
   html.on("click", ".roll-attack", async (ev) => {
-    ev.preventDefault();
-    const itemInfo = ev.currentTarget.closest(".dx3rd-item-info");
-    const actor = game.actors.get(itemInfo.dataset.actorId);
-    const item = actor.items.get(itemInfo.dataset.itemId);
+    // 현재 선택된 타겟들 가져오기
+    const targets = Array.from(game.user.targets || []);
+    if(targets.length < 1) {
+      ui.notifications.info(`${game.i18n.localize("DX3rd.SelectTarget")}`);
+      return;
+    }
 
-    const id = item.system.skill;
-    const skill = actor.system.attributes.skills[id];
-    const title =
-      skill.name.indexOf("DX3rd.") != -1
-        ? game.i18n.localize(skill.name)
-        : skill.name;
-    const type = item.type == "vehicle" ? "melee" : item.system.type;
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+        .filter(target => target.actor?.system.conditions.stealth?.active)
+        .map(target => target.actor?.name);
 
-    const diceOptions = {
-      rollType: "major",
-      attack: {
-        value: item.system.attack,
-        type: type,
-      },
-      base: skill.base,
-      skill: id,
-    };
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+      <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+      <ul>
+        ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+      </ul>
+      <hr>
+    `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
+    }
 
-    await actor.rollDice(title, diceOptions);
+    const runAction = async () => { 
+      ev.preventDefault();
+      const itemInfo = ev.currentTarget.closest(".dx3rd-item-info");
+      const actor = game.actors.get(itemInfo.dataset.actorId);
+      const item = actor.items.get(itemInfo.dataset.itemId);
+  
+      // hatred 상태 이상 시 조건 확인
+      if (actor.system.conditions.hatred?.active) {
+        const hatredTarget = actor.system.conditions.hatred.target;
+        const isHatredMatched = targets.some(target => target.actor?.name === hatredTarget);
+  
+        if (!isHatredMatched) {
+          ui.notifications.info(`You must attck hatred target(${hatredTarget}) while in hatred.`);
+          return;
+        }
+      }
+  
+      const id = item.system.skill;
+      const skill = actor.system.attributes.skills[id];
+      const title =
+        skill.name.indexOf("DX3rd.") != -1
+          ? game.i18n.localize(skill.name)
+          : skill.name;
+      const type = item.type == "vehicle" ? "melee" : item.system.type;
+  
+      const diceOptions = {
+        rollType: "major",
+        attack: {
+          value: item.system.attack,
+          type: type,
+        },
+        base: skill.base,
+        skill: id,
+      };
+  
+      await actor.rollDice(title, diceOptions);
+    }
   });
 
   html.on("click", ".calc-damage", async (ev) => {
@@ -957,31 +1291,31 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
 
   // 상태이상의 label이 "DX3rd.Berserk"인 경우에만 처리
   if (condition === "berserk") {
-      // 상태이상을 생성한 유저에 해당하는지 확인
-      if (actor && game.user.id === userId) {
-          let options = [
-              { value: "normal", label: game.i18n.localize("DX3rd.Normal") },
-              { value: "release", label: game.i18n.localize("DX3rd.UrgeRelease") },
-              { value: "hunger", label: game.i18n.localize("DX3rd.UrgeHunger") },
-              { value: "bloodsucking", label: game.i18n.localize("DX3rd.UrgeBloodsucking") },
-              { value: "slaughter", label: game.i18n.localize("DX3rd.UrgeSlaughter") },
-              { value: "destruction", label: game.i18n.localize("DX3rd.UrgeDestruction") },
-              { value: "tourture", label: game.i18n.localize("DX3rd.UrgeTourture") },
-              { value: "distaste", label: game.i18n.localize("DX3rd.UrgeDistaste") },
-              { value: "battlelust", label: game.i18n.localize("DX3rd.UrgeBattlelust") },
-              { value: "delusion", label: game.i18n.localize("DX3rd.UrgeDelusion") },
-              { value: "selfmutilation", label: game.i18n.localize("DX3rd.UrgeSelfmutilation") },
-              { value: "fear", label: game.i18n.localize("DX3rd.UrgeFear") },
-              { value: "hatred", label: game.i18n.localize("DX3rd.UrgeHatred") }
-          ];
+    // 상태이상을 생성한 유저에 해당하는지 확인
+    if (actor && game.user.id === userId) {
+      let options = [
+        { value: "normal", label: game.i18n.localize("DX3rd.Normal") },
+        { value: "release", label: game.i18n.localize("DX3rd.UrgeRelease") },
+        { value: "hunger", label: game.i18n.localize("DX3rd.UrgeHunger") },
+        { value: "bloodsucking", label: game.i18n.localize("DX3rd.UrgeBloodsucking") },
+        { value: "slaughter", label: game.i18n.localize("DX3rd.UrgeSlaughter") },
+        { value: "destruction", label: game.i18n.localize("DX3rd.UrgeDestruction") },
+        { value: "tourture", label: game.i18n.localize("DX3rd.UrgeTourture") },
+        { value: "distaste", label: game.i18n.localize("DX3rd.UrgeDistaste") },
+        { value: "battlelust", label: game.i18n.localize("DX3rd.UrgeBattlelust") },
+        { value: "delusion", label: game.i18n.localize("DX3rd.UrgeDelusion") },
+        { value: "selfmutilation", label: game.i18n.localize("DX3rd.UrgeSelfmutilation") },
+        { value: "fear", label: game.i18n.localize("DX3rd.UrgeFear") },
+        { value: "hatred", label: game.i18n.localize("DX3rd.UrgeHatred") }
+      ];
 
-          // 옵션 생성
-          let optionElements = options.map(option => `<option value="${option.value}">${option.label}</option>`).join("");
+      // 옵션 생성
+      let optionElements = options.map(option => `<option value="${option.value}">${option.label}</option>`).join("");
 
-          // 다이얼로그 생성 (드롭다운을 통해 타입 선택)
-          new Dialog({
-              title: game.i18n.localize("DX3rd.Berserk"),
-              content: `
+      // 다이얼로그 생성 (드롭다운을 통해 타입 선택)
+      new Dialog({
+        title: game.i18n.localize("DX3rd.Berserk"),
+        content: `
             <style>
               #berserk-type {
                 width: 100%; /* 셀렉트 박스의 너비를 100%로 설정하여 다이얼로그에 맞춤 */
@@ -992,106 +1326,106 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
               ${optionElements}  <!-- 자바스크립트로 생성된 옵션들 삽입 -->
             </select>
             <hr>`,
-              buttons: {
-                  ok: {
-                      label: "OK",
-                      callback: async (html) => {
-                          // 선택된 타입 가져오기
-                          const selectedType = html.find("#berserk-type").val();
-                          // 선택된 타입을 actor의 conditions에 업데이트
-                          if (selectedType === "selfmutilation") {
-                              const currentHP = actor.system.attributes.hp.value;
-                              const afterHP = currentHP - 5;
-                              if (afterHP < 0) {
-                                  afterHP === 0;
-                              }
-                              await actor.update({ "system.attributes.hp.value": afterHP })
-                              const effect = actor.effects.find(e => e.data.label === `${game.i18n.localize("DX3rd.Berserk")}`);
+        buttons: {
+          ok: {
+            label: "OK",
+            callback: async (html) => {
+              // 선택된 타입 가져오기
+              const selectedType = html.find("#berserk-type").val();
+              // 선택된 타입을 actor의 conditions에 업데이트
+              if (selectedType === "selfmutilation") {
+                const currentHP = actor.system.attributes.hp.value;
+                const afterHP = currentHP - 5;
+                if (afterHP < 0) {
+                  afterHP === 0;
+                }
+                await actor.update({ "system.attributes.hp.value": afterHP })
+                const effect = actor.effects.find(e => e.data.label === `${game.i18n.localize("DX3rd.Berserk")}`);
 
-                              if (effect) {
-                                  // 'berserk' 상태가 이미 있을 경우 제거
-                                  await effect.delete();
-                                  console.log(`Removed berserk from token: ${actor.name}`);
-                              }
-                          } else if (selectedType === "fear") {
-                              await actor.update({
-                                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
-                                  "system.conditions.berserk.active": true         // 상태 활성화
-                              });
+                if (effect) {
+                  // 'berserk' 상태가 이미 있을 경우 제거
+                  await effect.delete();
+                  console.log(`Removed berserk from token: ${actor.name}`);
+                }
+              } else if (selectedType === "fear") {
+                await actor.update({
+                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
+                  "system.conditions.berserk.active": true         // 상태 활성화
+                });
 
-                              const effectData = {
-                                  id: "riger",
-                                  label: game.i18n.localize("DX3rd.Riger"),
-                                  icon: "icons/svg/lightning.svg", // 아이콘 경로
-                                  disabled: false,
-                                  duration: { rounds: 9999 }, // 지속 시간 설정 (라운드 단위)
-                                  flags: { "dx3rd": { statusId: "riger" } }
-                              };
+                const effectData = {
+                  id: "riger",
+                  label: game.i18n.localize("DX3rd.Riger"),
+                  icon: "icons/svg/lightning.svg", // 아이콘 경로
+                  disabled: false,
+                  duration: { rounds: 9999 }, // 지속 시간 설정 (라운드 단위)
+                  flags: { "dx3rd": { statusId: "riger" } }
+                };
 
-                              // 새로운 상태이상 적용
-                              await actor.createEmbeddedDocuments("ActiveEffect", [effectData]);
-                              console.log(`Applied berserk to token: ${actor.name}`);
-                          } else {
-                              await actor.update({
-                                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
-                                  "system.conditions.berserk.active": true         // 상태 활성화
-                              });
-                          }
-                      }
-                  },
-                  cancel: {
-                      label: "Cancel",
-                      callback: async () => {
-                          await effect.delete();  // 상태이상 적용 취소
-                      }
-                  }
+                // 새로운 상태이상 적용
+                await actor.createEmbeddedDocuments("ActiveEffect", [effectData]);
+                console.log(`Applied berserk to token: ${actor.name}`);
+              } else {
+                await actor.update({
+                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
+                  "system.conditions.berserk.active": true         // 상태 활성화
+                });
               }
-          }).render(true);
-      }
+            }
+          },
+          cancel: {
+            label: "Cancel",
+            callback: async () => {
+              await effect.delete();  // 상태이상 적용 취소
+            }
+          }
+        }
+      }).render(true);
+    }
   }
 
   // 상태이상의 label이 "DX3rd.Tainted"인 경우에만 처리
   else if (condition === "tainted") {
-      // 상태이상을 생성한 유저에 해당하는지 확인
-      if (actor && game.user.id === userId) {
-          // 다이얼로그 생성 (userId에 대응하는 사용자에게만 띄움)
-          new Dialog({
-              title: game.i18n.localize("DX3rd.Tainted"),
-              content: `<p>Input the rank:</p><input type="text" id="tainted-value" />`,
-              buttons: {
-                  ok: {
-                      label: "OK",
-                      callback: async (html) => {
-                          const inputValue = html.find("#tainted-value").val();  // 입력된 값 가져오기
-                          await actor.update({
-                              "system.conditions.tainted.value": inputValue,  // 입력값 저장
-                              "system.conditions.tainted.active": true        // 상태 활성화
-                          });
-                      }
-                  },
-                  cancel: {
-                      label: "Cancel",
-                      callback: async () => {
-                          await effect.delete();  // 상태이상 적용 취소
-                      }
-                  }
-              }
-          }).render(true);
-      }
+    // 상태이상을 생성한 유저에 해당하는지 확인
+    if (actor && game.user.id === userId) {
+      // 다이얼로그 생성 (userId에 대응하는 사용자에게만 띄움)
+      new Dialog({
+        title: game.i18n.localize("DX3rd.Tainted"),
+        content: `<p>Input the rank:</p><input type="text" id="tainted-value" />`,
+        buttons: {
+          ok: {
+            label: "OK",
+            callback: async (html) => {
+              const inputValue = html.find("#tainted-value").val();  // 입력된 값 가져오기
+              await actor.update({
+                "system.conditions.tainted.value": inputValue,  // 입력값 저장
+                "system.conditions.tainted.active": true        // 상태 활성화
+              });
+            }
+          },
+          cancel: {
+            label: "Cancel",
+            callback: async () => {
+              await effect.delete();  // 상태이상 적용 취소
+            }
+          }
+        }
+      }).render(true);
+    }
   }
 
   // 상태이상의 label이 "DX3rd.Hatred"인 경우에만 처리
   else if (condition === "hatred") {
-      // 상태이상을 생성한 유저에 해당하는지 확인
-      if (actor && game.user.id === userId) {
-          // 현재 토큰을 제외한 다른 토큰들의 리스트 생성
-          let otherTokens = canvas.tokens.placeables.filter(token => token.actor && token.actor.id !== actor.id);
-          let tokenOptions = otherTokens.map(token => `<option value="${token.actor.name}">${token.actor.name}</option>`).join("");
+    // 상태이상을 생성한 유저에 해당하는지 확인
+    if (actor && game.user.id === userId) {
+      // 현재 토큰을 제외한 다른 토큰들의 리스트 생성
+      let otherTokens = canvas.tokens.placeables.filter(token => token.actor && token.actor.id !== actor.id);
+      let tokenOptions = otherTokens.map(token => `<option value="${token.actor.name}">${token.actor.name}</option>`).join("");
 
-          // 다이얼로그 생성 (드롭다운을 통해 토큰 선택)
-          new Dialog({
-              title: game.i18n.localize("DX3rd.Hatred"),
-              content: `
+      // 다이얼로그 생성 (드롭다운을 통해 토큰 선택)
+      new Dialog({
+        title: game.i18n.localize("DX3rd.Hatred"),
+        content: `
         <style>
           #hatred-target {
             width: 100%; /* 셀렉트 박스의 너비를 100%로 설정하여 다이얼로그에 맞춤 */
@@ -1100,42 +1434,42 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
         <p>Select the target:</p>
         <select id="hatred-target">${tokenOptions}</select>
         <hr>`,
-              buttons: {
-                  ok: {
-                      label: "OK",
-                      callback: async (html) => {
-                          // 선택된 토큰 이름 가져오기
-                          const selectedTokenName = html.find("#hatred-target").val();
-                          // 선택된 토큰의 이름을 actor의 conditions에 업데이트
-                          await actor.update({
-                              "system.conditions.hatred.target": selectedTokenName,  // 선택한 토큰 이름 저장
-                              "system.conditions.hatred.active": true                // 상태 활성화
-                          });
-                      }
-                  },
-                  cancel: {
-                      label: "Cancel",
-                      callback: async () => {
-                          await effect.delete();  // 상태이상 적용 취소
-                      }
-                  }
-              }
-          }).render(true);
-      }
+        buttons: {
+          ok: {
+            label: "OK",
+            callback: async (html) => {
+              // 선택된 토큰 이름 가져오기
+              const selectedTokenName = html.find("#hatred-target").val();
+              // 선택된 토큰의 이름을 actor의 conditions에 업데이트
+              await actor.update({
+                "system.conditions.hatred.target": selectedTokenName,  // 선택한 토큰 이름 저장
+                "system.conditions.hatred.active": true                // 상태 활성화
+              });
+            }
+          },
+          cancel: {
+            label: "Cancel",
+            callback: async () => {
+              await effect.delete();  // 상태이상 적용 취소
+            }
+          }
+        }
+      }).render(true);
+    }
   }
 
   // 상태이상의 label이 "DX3rd.Fear"인 경우에만 처리
   else if (condition === "fear") {
-      // 상태이상을 생성한 유저에 해당하는지 확인
-      if (actor && game.user.id === userId) {
-          // 현재 토큰을 제외한 다른 토큰들의 리스트 생성
-          let otherTokens = canvas.tokens.placeables.filter(token => token.actor && token.actor.id !== actor.id);
-          let tokenOptions = otherTokens.map(token => `<option value="${token.actor.name}">${token.actor.name}</option>`).join("");
+    // 상태이상을 생성한 유저에 해당하는지 확인
+    if (actor && game.user.id === userId) {
+      // 현재 토큰을 제외한 다른 토큰들의 리스트 생성
+      let otherTokens = canvas.tokens.placeables.filter(token => token.actor && token.actor.id !== actor.id);
+      let tokenOptions = otherTokens.map(token => `<option value="${token.actor.name}">${token.actor.name}</option>`).join("");
 
-          // 다이얼로그 생성 (드롭다운을 통해 토큰 선택)
-          new Dialog({
-              title: game.i18n.localize("DX3rd.Fear"),
-              content: `
+      // 다이얼로그 생성 (드롭다운을 통해 토큰 선택)
+      new Dialog({
+        title: game.i18n.localize("DX3rd.Fear"),
+        content: `
         <style>
           #fear-target {
             width: 100%; /* 셀렉트 박스의 너비를 100%로 설정하여 다이얼로그에 맞춤 */
@@ -1144,35 +1478,35 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
         <p>Select the target:</p>
         <select id="fear-target">${tokenOptions}</select>
         <hr>`,
-              buttons: {
-                  ok: {
-                      label: "OK",
-                      callback: async (html) => {
-                          // 선택된 토큰 이름 가져오기
-                          const selectedTokenName = html.find("#fear-target").val();
-                          // 선택된 토큰의 이름을 actor의 conditions에 업데이트
-                          await actor.update({
-                              "system.conditions.fear.target": selectedTokenName,  // 선택한 토큰 이름 저장
-                              "system.conditions.fear.active": true                // 상태 활성화
-                          });
-                      }
-                  },
-                  cancel: {
-                      label: "Cancel",
-                      callback: async () => {
-                          await effect.delete();  // 상태이상 적용 취소
-                      }
-                  }
-              }
-          }).render(true);
-      }
+        buttons: {
+          ok: {
+            label: "OK",
+            callback: async (html) => {
+              // 선택된 토큰 이름 가져오기
+              const selectedTokenName = html.find("#fear-target").val();
+              // 선택된 토큰의 이름을 actor의 conditions에 업데이트
+              await actor.update({
+                "system.conditions.fear.target": selectedTokenName,  // 선택한 토큰 이름 저장
+                "system.conditions.fear.active": true                // 상태 활성화
+              });
+            }
+          },
+          cancel: {
+            label: "Cancel",
+            callback: async () => {
+              await effect.delete();  // 상태이상 적용 취소
+            }
+          }
+        }
+      }).render(true);
+    }
   }
 
   // 나머지 상태이상 처리
   else {
-      await actor.update({
-          [`system.conditions.${condition}.active`]: true
-      });
+    await actor.update({
+      [`system.conditions.${condition}.active`]: true
+    });
   }
 });
 
@@ -1182,45 +1516,57 @@ Hooks.on("deleteActiveEffect", async (effect) => {
 
   // 상태이상의 label이 "DX3rd.Berserk"인 경우에만 처리
   if (condition === "berserk") {
-    if (actor) {
-      // 상태 해제 시 값을 null로 설정
-      await actor.update({
-        "system.conditions.berserk.active": false,
-        "system.conditions.berserk.type": "-"
-      });
+    // 상태 해제 시 값을 null로 설정
+    await actor.update({
+      "system.conditions.berserk.active": false,
+      "system.conditions.berserk.type": "-"
+    });
+
+    const effect = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === condition);
+    if (effect) {
+      await effect.delete();
     }
   }
 
   // 상태이상의 label이 "DX3rd.Tainted"인 경우에만 처리
   else if (condition === "tainted") {
-    if (actor) {
-      // 상태 해제 시 값을 null로 설정
-      await actor.update({
-        "system.conditions.tainted.active": false,
-        "system.conditions.tainted.value": null
-      });
+    // 상태 해제 시 값을 null로 설정
+    await actor.update({
+      "system.conditions.tainted.active": false,
+      "system.conditions.tainted.value": null
+    });
+
+    const effect = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === condition);
+    if (effect) {
+      await effect.delete();
     }
   }
 
   // 상태이상의 label이 "DX3rd.Hatred"인 경우에만 처리
   else if (condition === "hatred") {
-    if (actor) {
-      // 상태 해제 시 값을 null로 설정
-      await actor.update({
-        "system.conditions.hatred.active": false,
-        "system.conditions.hatred.target": null
-      });
+    // 상태 해제 시 값을 null로 설정
+    await actor.update({
+      "system.conditions.hatred.active": false,
+      "system.conditions.hatred.target": null
+    });
+
+    const effect = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === condition);
+    if (effect) {
+      await effect.delete();
     }
   }
 
   // 상태이상의 label이 "DX3rd.Fear"인 경우에만 처리
   else if (condition === "fear") {
-    if (actor) {
-      // 상태 해제 시 값을 null로 설정
-      await actor.update({
-        "system.conditions.fear.active": false,
-        "system.conditions.fear.target": null
-      });
+    // 상태 해제 시 값을 null로 설정
+    await actor.update({
+      "system.conditions.fear.active": false,
+      "system.conditions.fear.target": null
+    });
+
+    const effect = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === condition);
+    if (effect) {
+      await effect.delete();
     }
   }
 
@@ -1229,5 +1575,10 @@ Hooks.on("deleteActiveEffect", async (effect) => {
     await actor.update({
       [`system.conditions.${condition}.active`]: false
     });
+
+    const effect = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === condition);
+    if (effect) {
+      await effect.delete();
+    }
   }
 });

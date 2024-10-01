@@ -851,70 +851,78 @@ export class DX3rdActor extends Actor {
       diceOptions.critical = critical;
     }
 
+    // 현재 선택된 타겟들 가져오기
+    const selectedTargets = Array.from(game.user.targets || []);
+
+    // key가 일치하는 아이템을 찾아서 item으로 정의
+    let item = this.items.get(diceOptions.key);
+    if (item) {
+      // hatred 상태 이상 시 조건 확인
+      if (this.system.conditions.hatred?.active && item.system.attacRoll !== "-") {
+        const hatredTarget = this.system.conditions.hatred.target;
+
+        const isHatredMatched = selectedTargets.some(target => target.actor?.name === hatredTarget);
+
+        if (!isHatredMatched) {
+          ui.notifications.info(`You must attck hatred target(${hatredTarget}) while in hatred.`);
+          return;  // 조건이 만족되면 기능 실행 중단
+        }
+      }
+    }
+
     // attack 타입의 값을 처리할 때 add를 제대로 반영
-    if ("attack" in diceOptions) {
+    if (diceOptions.attack && "attack" in diceOptions) {
       diceOptions.add += Number(this.system.attributes.add[diceOptions.attack.type]); // 추가 보정치 반영
     }
 
     // 다이얼로그 내용 생성
     let content = `
-        <table style="text-align: center;">
-          <tr>
-            <th>${game.i18n.localize("DX3rd.Dice")}</th>
-            <th>${game.i18n.localize("DX3rd.Critical")}</th>
-            <th>${game.i18n.localize("DX3rd.Add")}</th>
-          </tr>
-          <tr>
-            <td><input type='text' id='roll-dice' value='${
-              diceOptions.dice
-            }'></td>
-            <td><input type='text' id='roll-critical' value='${
-              diceOptions.critical
-            }'></td>
-            <td><input type='text' id='roll-add' value='${
-              diceOptions.add
-            }'></td>
-          </tr>
-        </table><script>$("#roll-dice").focus()</script>
-    `;
-
-    // 현재 선택된 타겟들 가져오기
-    const selectedTargets = Array.from(game.user.targets || []);
+            <table style="text-align: center;">
+              <tr>
+                <th>${game.i18n.localize("DX3rd.Dice")}</th>
+                <th>${game.i18n.localize("DX3rd.Critical")}</th>
+                <th>${game.i18n.localize("DX3rd.Add")}</th>
+              </tr>
+              <tr>
+                <td><input type='text' id='roll-dice' value='${diceOptions.dice}'></td>
+                <td><input type='text' id='roll-critical' value='${diceOptions.critical}'></td>
+                <td><input type='text' id='roll-add' value='${diceOptions.add}'></td>
+              </tr>
+            </table><script>$("#roll-dice").focus()</script>
+        `;
 
     if (this.system.conditions.fear?.active && selectedTargets.length > 0) {
-
       // 선택된 타겟 중 fear.target과 이름이 같은 타겟이 있는지 확인
-      const isTargetMatched = selectedTargets.some(target => target.actor?.name === this.system.conditions.fear.target);
+      const isFearMatched = selectedTargets.some(target => target.actor?.name === this.system.conditions.fear.target);
 
       content += `
-          <table style="text-align: center;">
-            <tr>
-              <th>${game.i18n.localize("DX3rd.Condition")}: ${game.i18n.localize("DX3rd.UrgeFear")}</th>
-              <th>${game.i18n.localize("DX3rd.Target")}: ${this.system.conditions.fear.target}</th>
-              <td><input type="checkbox" id="fear" ${isTargetMatched ? "checked" : ""}></td>
-            </tr>
-          </table>
-          `;
+              <table style="text-align: center;">
+                <tr>
+                  <th>${game.i18n.localize("DX3rd.Condition")}: ${game.i18n.localize("DX3rd.UrgeFear")}</th>
+                  <th>${game.i18n.localize("DX3rd.Target")}: ${this.system.conditions.fear.target}</th>
+                  <td><input type="checkbox" id="fear" ${isFearMatched ? "checked" : ""}></td>
+                </tr>
+              </table>
+              `;
     }
-    
+
     if (this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "distaste") {
       content += `
-          <table style="text-align: center;">
-            <tr>
-              <th>${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeDistaste")}</th>
-              <th></th>
-              <td><input type="checkbox" id="distaste"></td>
-            </tr>
-          </table>
-          `
+              <table style="text-align: center;">
+                <tr>
+                  <th>${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeDistaste")}</th>
+                  <th></th>
+                  <td><input type="checkbox" id="distaste"></td>
+                </tr>
+              </table>
+              `;
     }
 
     // updateOptions 함수에서 다이얼로그 입력값을 diceOptions에 반영
     let updateOptions = () => {
       // NaN 처리 및 값 반영
       diceOptions.dice = Number($("#roll-dice").val()) || diceOptions.dice;
-      diceOptions.critical =
-        Number($("#roll-critical").val()) || diceOptions.critical;
+      diceOptions.critical = Number($("#roll-critical").val()) || diceOptions.critical;
       diceOptions.add = Number($("#roll-add").val()) || diceOptions.add;
 
       diceOptions.fearChecked = $("#fear").is(":checked");  // fear 체크 상태 저장
@@ -927,12 +935,20 @@ export class DX3rdActor extends Actor {
       }
     };
 
+    let deleteHatred = async () => {
+      if (this.system.conditions.hatred?.active) {
+        const effect = this.effects.find(e => e.data.flags?.dx3rd?.statusId === "hatred");
+        await effect.delete();
+      }
+    };
+
     // 버튼 생성
     let buttons = {
       major: {
         icon: '<i class="fas fa-check"></i>',
         label: game.i18n.localize("DX3rd.Major"),
         callback: () => {
+          deleteHatred();
           updateOptions(); // 수정된 값을 diceOptions에 반영
           diceOptions["rollType"] = "major";
           this._onRollDice(title, diceOptions); // 반영된 값으로 주사위 굴림
@@ -942,6 +958,7 @@ export class DX3rdActor extends Actor {
         icon: '<i class="fas fa-check"></i>',
         label: game.i18n.localize("DX3rd.Reaction"),
         callback: () => {
+          deleteHatred();
           updateOptions(); // 수정된 값을 diceOptions에 반영
           diceOptions["rollType"] = "reaction";
           this._onRollDice(title, diceOptions); // 반영된 값으로 주사위 굴림
@@ -951,6 +968,7 @@ export class DX3rdActor extends Actor {
         icon: '<i class="fas fa-check"></i>',
         label: game.i18n.localize("DX3rd.Dodge"),
         callback: () => {
+          deleteHatred();
           updateOptions(); // 수정된 값을 diceOptions에 반영
           diceOptions["rollType"] = "dodge";
           this._onRollDice(title, diceOptions); // 반영된 값으로 주사위 굴림
@@ -958,12 +976,13 @@ export class DX3rdActor extends Actor {
       },
     };
 
-    if ( "rollType" in diceOptions ) {
+    if ("rollType" in diceOptions) {
       buttons = {
         major: {
           icon: '<i class="fas fa-check"></i>',
           label: game.i18n.localize("DX3rd.Roll"),
           callback: () => {
+            deleteHatred();
             updateOptions(); // 수정된 값을 diceOptions에 반영
             this._onRollDice(title, diceOptions); // 반영된 값으로 주사위 굴림
           },

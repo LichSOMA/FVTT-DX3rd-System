@@ -273,5 +273,8 @@
   "DX3rd.ActionDelay": "행동대기",
 
   "DX3rd.LostHP": "HP 상실",
-  "DX3rd.Healing": "힐링"
+  "DX3rd.Healing": "힐링",
+
+  "DX3rd.StealthCharacter": "은밀 캐릭터",
+  "DX3rd.StealthTargetCheck": "은밀 상태 확인"
 }
