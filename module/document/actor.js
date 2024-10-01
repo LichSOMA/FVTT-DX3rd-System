@@ -137,18 +137,19 @@ export class DX3rdActor extends Actor {
       mind_dice: { value: 0 },
       social_dice: { value: 0 },
 
-      // 추가된 values
+      // 추가된 values //
       casting_dice: { value: 0 },
       casting_add: { value: 0 },
       //
     };
-    // 추가된 attributes
+    // 추가된 attributes //
     attributes.casting_dice = values.casting_dice;
     attributes.casting_add = values.casting_add;
     attributes.saving_max = values.saving_max;
     attributes.stock_point = values.stock_point;
     //
 
+    // 상태이상 처리를 위해 추가된 attributes //
     attributes.condition_dice = 0;
     if (this.system.conditions.dazed?.active) {
       attributes.condition_dice += 2;
@@ -156,6 +157,10 @@ export class DX3rdActor extends Actor {
     if (this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "hunger") {
       attributes.condition_dice += 5;
     }
+
+    // 승화 처리를 위해 추가된 attributes
+    attributes.sublimation_casting_dice = attributes.sublimation_casting_dice || { value: 0 };
+    attributes.sublimation_damage_roll = attributes.sublimation_damage_roll || { value: 0 };
 
     let skills = attributes.skills;
     for (const [key, value] of Object.entries(skills)) {
@@ -1060,7 +1065,9 @@ export class DX3rdActor extends Actor {
 
     let castingDice = Math.floor((mind + will) / 2); // 마술 굴림 주사위 개수
 
-    let appendDice = this.system.attributes.casting_dice.value;
+    let additionalCastingDice = Number(this.system.attributes.casting_dice.value);
+    let sublimationCastingDice = Number(this.system.attributes.sublimation_casting_dice?.value ?? 0);
+    let appendDice = additionalCastingDice + sublimationCastingDice;
     let appendAdd = this.system.attributes.casting_add.value;
 
     let invoke = diceOptions.invoke;
@@ -1191,7 +1198,10 @@ export class DX3rdActor extends Actor {
                 diceOptions.key,
                 "roll"
               );
-            }
+            };
+            await this.update({
+              "system.attributes.sublimation_casting_dice.value": 0
+            });
           },
         },
       },
@@ -1487,7 +1497,6 @@ export class DX3rdActor extends Actor {
 }
 
 // 변이폭주: 흡혈 자동화 //
-
 Hooks.on("preUpdateActor", async (actor, updateData) => {
   // 조건: berserk 상태가 활성화되어 있고, berserk의 타입이 bloodsucking인 경우
   if (actor.system.conditions.berserk?.active && actor.system.conditions.berserk.type === "bloodsucking") {

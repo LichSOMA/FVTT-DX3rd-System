@@ -477,38 +477,6 @@ async function chatListeners(html) {
       }
     }
 
-    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
-    if (hasStealthTarget) {
-      const stealthTargets = targets
-      .filter(target => target.actor?.system.conditions.stealth?.active)
-      .map(target => target.actor?.name);
-
-      new Dialog({
-        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
-        content: `
-          <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
-          <ul>
-            ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
-          </ul>
-          <hr>
-        `,
-        buttons: {
-          confirm: {
-            icon: '<i class="fas fa-check"></i>',
-            label: `Confirm`,
-            callback: () => runAction()
-          },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
-            label: `Cancel`
-          }
-        },
-        default: "cancel"
-      }).render(true);
-    } else {
-      runAction()
-    }
-
     const runAction = async() => {
       Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
 
@@ -544,6 +512,39 @@ async function chatListeners(html) {
           new WeaponDialog(actor, confirm).render(true);
         }
       }
+    }
+
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+      .filter(target => target.actor?.system.conditions.stealth?.active)
+      .map(target => target.actor?.name);
+
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+          <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+          <ul>
+            ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+          </ul>
+          <hr>
+        `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
     }
   });
 
@@ -613,38 +614,6 @@ async function chatListeners(html) {
       }
     }
 
-    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
-    if (hasStealthTarget) {
-      const stealthTargets = targets
-      .filter(target => target.actor?.system.conditions.stealth?.active)
-      .map(target => target.actor?.name);
-
-      new Dialog({
-        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
-        content: `
-          <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
-          <ul>
-            ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
-          </ul>
-          <hr>
-        `,
-        buttons: {
-          confirm: {
-            icon: '<i class="fas fa-check"></i>',
-            label: `Confirm`,
-            callback: () => runAction()
-          },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
-            label: `Cancel`
-          }
-        },
-        default: "cancel"
-      }).render(true);
-    } else {
-      runAction()
-    }
-
     const runAction = async () => {
       // 효과와 매크로 실행
       for (let e of effectItems) {
@@ -709,6 +678,39 @@ async function chatListeners(html) {
         }
       }
     }
+
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+      .filter(target => target.actor?.system.conditions.stealth?.active)
+      .map(target => target.actor?.name);
+
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+          <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+          <ul>
+            ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+          </ul>
+          <hr>
+        `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
+    }
   });
 
   // 채팅창에 호출된 spell 아이템의 사용 버튼을 누를 경우 실행되는 기능 구현 //
@@ -739,7 +741,33 @@ async function chatListeners(html) {
       }
     }
 
+    const runAction = async () => { 
+      Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
+
+      usingEffect(item);
+  
+      Hooks.call("updateActorCost", actor, item.id, "target");
+      
+      if (rollType === "-") {
+        runningMacro(item.system.macro, actor, item);
+        Hooks.call("updateActorCost", actor, item.id, "roll");
+      } else {
+        const diceOptions = {
+          key: item.id,
+          rollType: rollType,
+          spelltype: spellType,
+          invoke: invoke,
+          evocation: evocation,
+          macro: macroName,
+          item: item,
+        };
+  
+        await actor._onSpellRoll(diceOptions);
+      }
+    }
+
     const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+
     if (hasStealthTarget) {
       const stealthTargets = targets
         .filter(target => target.actor?.system.conditions.stealth?.active)
@@ -769,31 +797,6 @@ async function chatListeners(html) {
       }).render(true);
     } else {
       runAction()
-    }
-
-    const runAction = async () => { 
-      Hooks.call("setActorCost", actor, item.id, "encroachment", encroach);
-
-      usingEffect(item);
-  
-      Hooks.call("updateActorCost", actor, item.id, "target");
-      
-      if (rollType === "-") {
-        runningMacro(item.system.macro, actor, item);
-        Hooks.call("updateActorCost", actor, item.id, "roll");
-      } else {
-        const diceOptions = {
-          key: item.id,
-          rollType: rollType,
-          spelltype: spellType,
-          invoke: invoke,
-          evocation: evocation,
-          macro: macroName,
-          item: item,
-        };
-  
-        await actor._onSpellRoll(diceOptions);
-      }
     }
   });
 
@@ -890,38 +893,6 @@ async function chatListeners(html) {
       }
     }
 
-    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
-    if (hasStealthTarget) {
-      const stealthTargets = targets
-        .filter(target => target.actor?.system.conditions.stealth?.active)
-        .map(target => target.actor?.name);
-
-      new Dialog({
-        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
-        content: `
-      <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
-      <ul>
-        ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
-      </ul>
-      <hr>
-    `,
-        buttons: {
-          confirm: {
-            icon: '<i class="fas fa-check"></i>',
-            label: `Confirm`,
-            callback: () => runAction()
-          },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
-            label: `Cancel`
-          }
-        },
-        default: "cancel"
-      }).render(true);
-    } else {
-      runAction()
-    }
-
     const runAction = async () => { 
       Hooks.call("setActorCost", actor, item.id, "hp", hp);
 
@@ -958,15 +929,6 @@ async function chatListeners(html) {
         }
       }
     }
-  });
-
-  html.on("click", ".roll-attack", async (ev) => {
-    // 현재 선택된 타겟들 가져오기
-    const targets = Array.from(game.user.targets || []);
-    if(targets.length < 1) {
-      ui.notifications.info(`${game.i18n.localize("DX3rd.SelectTarget")}`);
-      return;
-    }
 
     const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
     if (hasStealthTarget) {
@@ -998,6 +960,15 @@ async function chatListeners(html) {
       }).render(true);
     } else {
       runAction()
+    }
+  });
+
+  html.on("click", ".roll-attack", async (ev) => {
+    // 현재 선택된 타겟들 가져오기
+    const targets = Array.from(game.user.targets || []);
+    if(targets.length < 1) {
+      ui.notifications.info(`${game.i18n.localize("DX3rd.SelectTarget")}`);
+      return;
     }
 
     const runAction = async () => { 
@@ -1037,6 +1008,39 @@ async function chatListeners(html) {
   
       await actor.rollDice(title, diceOptions);
     }
+
+    const hasStealthTarget = targets.some(target => target.actor?.system.conditions.stealth?.active);
+
+    if (hasStealthTarget) {
+      const stealthTargets = targets
+        .filter(target => target.actor?.system.conditions.stealth?.active)
+        .map(target => target.actor?.name);
+
+      new Dialog({
+        title: game.i18n.localize("DX3rd.StealthTargetCheck"),
+        content: `
+      <p>${game.i18n.localize("DX3rd.StealthCharacter")}:</p>
+      <ul>
+        ${stealthTargets.map(name => `<li>${name}</li>`).join('')}
+      </ul>
+      <hr>
+    `,
+        buttons: {
+          confirm: {
+            icon: '<i class="fas fa-check"></i>',
+            label: `Confirm`,
+            callback: () => runAction()
+          },
+          cancel: {
+            icon: '<i class="fas fa-times"></i>',
+            label: `Cancel`
+          }
+        },
+        default: "cancel"
+      }).render(true);
+    } else {
+      runAction()
+    }
   });
 
   html.on("click", ".calc-damage", async (ev) => {
@@ -1049,13 +1053,17 @@ async function chatListeners(html) {
     const attack = Number(data.attack);
     const damage = Number(data.damage);
     const fear = Number(data.fear)
+    const sublimation_damage = Number(actor.system.attributes.sublimation_damage_roll?.value ?? 0);
+    ui.notifications.info(`${sublimation_damage}`);
+
+    const appendDamageRoll = damage + fear + sublimation_damage;
 
     const rollResult = Number(
       $(ev.currentTarget).parent().find(".dice-total").first().text()
     );
 
     let content = `
-            <h2 style="text-align: center;">[${rollResult} / 10 + 1 + ${damage}]D10 + ${attack}</h2>
+            <h2 style="text-align: center;">[${rollResult} / 10 + 1 + ${appendDamageRoll}]D10 + ${attack}</h2>
             <table class="calc-dialog">
               <tr>
                 <th>${game.i18n.localize("DX3rd.IgnoreArmor")}</th>
@@ -1102,11 +1110,11 @@ async function chatListeners(html) {
             let addDice =
               $("#add-dice").val() != "" ? Number($("#add-dice").val()) : 0;
             let formula = `${
-              parseInt((rollResult + addResult) / 10) + 1 + damage + addDice + fear
+              parseInt((rollResult + addResult) / 10) + 1 + appendDamageRoll + addDice
             }d10 + ${attack + addDamage}`;
             if ($("#tourture").is(":checked")) {
               formula = `${
-                parseInt((rollResult + addResult) / 10) + 1 + damage + addDice + fear
+                parseInt((rollResult + addResult) / 10) + 1 + appendDamageRoll + addDice
               }d10 + ${attack + addDamage - 20}`;
             }
 
@@ -1138,6 +1146,9 @@ async function chatListeners(html) {
               },
               { rollMode }
             );
+            await actor.update({
+              "system.attributes.sublimation_damage_roll.value": 0
+            });
           },
         },
       },
