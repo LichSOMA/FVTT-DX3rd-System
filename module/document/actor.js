@@ -361,6 +361,9 @@ export class DX3rdActor extends Actor {
     if(this.system.conditions.berserk?.active && this.system.conditions.berserk.type === "delusion") {
       values["init"].value -= 10;
     }
+    if(this.system.conditions.action_delay?.active) {
+      values["init"].value -= 999;
+    }
     values["init"].value = values["init"].value < 0 ? 0 : values["init"].value;
 
     attributes.move.battle =
@@ -1510,6 +1513,23 @@ Hooks.on("preUpdateActor", async (actor, updateData) => {
         updateData.system.attributes.hp.value = currentHP; // HP 변동을 막음
         ui.notifications.info("HP cannot increase while in Berserk: Bloodsucking.");
       }
+    }
+  }
+});
+
+// 전투불능 자동화 //
+
+Hooks.on("updateActor", async (actor, updateData) => {
+  // HP 값이 업데이트된 경우
+  if (hasProperty(updateData, "system.attributes.hp.value")) {
+    let newHp = getProperty(updateData, "system.attributes.hp.value");
+
+    // HP가 0 이하로 떨어졌을 경우
+    if (newHp <= 0) {
+      await actor.update({ "system.conditions.defeated.active": true });
+    } else {
+      // HP가 0보다 크면 상태 해제
+      await actor.update({ "system.conditions.defeated.active": false });
     }
   }
 });
