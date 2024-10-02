@@ -21,9 +21,9 @@ export class DX3rdCombat extends Combat {
     }
   
     if (startActor == null)
-      startActor = await Actor.create({name: startLabel, type: "character", img: "icons/pings/chevron.webp"});
+      startActor = await Actor.create({name: startLabel, type: "character", img: "icons/svg/clockwork.svg"});
     if (endActor == null)
-      endActor = await Actor.create({name: endLabel, type: "character", img: "icons/pings/chevron.webp"});
+      endActor = await Actor.create({name: endLabel, type: "character", img: "icons/svg/clockwork.svg"});
 
 
     for (let a of this.scene.tokens) {
