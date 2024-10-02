@@ -42,7 +42,7 @@ export class DX3rdCombat extends Combat {
     await this.setFlag("dx3rd", "startToken", startToken.uuid);
     await this.setFlag("dx3rd", "endToken", endToken.uuid);
 
-    await this.createEmbeddedDocuments("Combatant", [{actorId: startActor.id, tokenId: startToken.id, name: startLabel, img: startActor.img, initiative: 9999}, {actorId: endActor.id, tokenId: endToken.id, name: endLabel, img: startActor.img, initiative: -9999}], {});
+    await this.createEmbeddedDocuments("Combatant", [{actorId: startActor.id, tokenId: startToken.id, name: startLabel, img: startActor.img, initiative: 999}, {actorId: endActor.id, tokenId: endToken.id, name: endLabel, img: startActor.img, initiative: -999}], {});
     
     if ( !this.collection.viewed ) ui.combat.initialize({combat: this});
   }
@@ -76,9 +76,9 @@ export class DX3rdCombat extends Combat {
 
       let init = roll.total;
       if (combatant.tokenId == startToken.id)
-        init = 9999
+        init = 999
       else if (combatant.tokenId == endToken.id)
-        init = -9999
+        init = -999
 
       updates.push({_id: id, initiative: init});
     }
@@ -98,8 +98,8 @@ export class DX3rdCombat extends Combat {
   }
 
   _sortCombatants(a, b) {
-    const ia = Number.isNumeric(a.initiative) ? a.initiative : -9999;
-    const ib = Number.isNumeric(b.initiative) ? b.initiative : -9999;
+    const ia = Number.isNumeric(a.initiative) ? a.initiative : -999;
+    const ib = Number.isNumeric(b.initiative) ? b.initiative : -999;
     let ci = ib - ia;
     if ( ci !== 0 ) return ci;
 
@@ -136,86 +136,29 @@ export class DX3rdCombat extends Combat {
   /* -------------------------------------------- */	
 
   // 이니셔티브 재굴림
-  async _rollInitiative() {
+  async _dx3rdInitRoll() {
     for (let combatant of this.combatants) {
       if (combatant.name === "[ Setup ]") {
-        await combatant.update({ initiative: 9999 });
-      }
+        await combatant.update({ initiative: 999 });
+      } 
       else if (combatant.name === "[ Cleanup ]") {
-        await combatant.update({ initiative: -9999 });
-      } else {
-        // 각 컴배턴트의 이니셔티브 재굴림
+        await combatant.update({ initiative: -999 });
+      } 
+      else if (combatant.actor.system.conditions.action_delay?.active) {
+        // 행동 대기 상태일 때, 기존 이니셔티브를 유지
+        const currentInitiative = combatant.initiative ?? 0;  // 현재 이니셔티브 값이 없을 경우 0으로 설정
+        await combatant.update({ initiative: currentInitiative });
+      } 
+      else {
+        // 이니셔티브 재굴림
         await combatant.rollInitiative();
       }
     }
-
+  
     // 전투 데이터 업데이트
     await this.update({ round: this.round });
   }
-
-  async startCombat() {
-    // 먼저 모든 컴배턴트의 이니셔티브를 굴림
-    await this._rollInitiative();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    // 이후 전투 시작을 진행
-    super.startCombat();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    await this.countRounds()
-  }
-
-  async nextTurn() {
-    const combatant = this.turns[this.turn];
-
-    if (combatant.name === "[ Setup ]" || combatant.name === "[ Cleanup ]") {
-      // [setup] 또는 [cleanup]일 경우 바로 다음 턴으로 이동
-      super.nextTurn();
-      if (combatant.name === "[ Setup ]") {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-        this.initiative()
-      }
-    } else if (combatant.actor.system.conditions.action_delay?.active || combatant.actor.system.conditions.action_end?.active) {
-      await this._rollInitiative(); // 이니셔티브 재굴림
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      this._turnOrder(); // 다음 턴으로 이동
-    } else {
-      // 다이얼로그 생성
-      new Dialog({
-        title: "Turn End",
-        content: `
-        <p>${combatant.name}</p>
-      `,
-        buttons: {
-          endAction: {
-            label: game.i18n.localize("DX3rd.ActionEnd"),
-            callback: async () => {
-              // 행동 종료 상태 업데이트
-              await combatant.actor.update({
-                "system.conditions.action_end.active": true
-              });
-              await this._rollInitiative(); // 이니셔티브 재굴림
-              await new Promise((resolve) => setTimeout(resolve, 50));
-              this._turnOrder(); // 다음 턴으로 이동
-            },
-          },
-          delayAction: {
-            label: game.i18n.localize("DX3rd.ActionDelay"),
-            callback: async () => {
-              // 행동 대기 상태 업데이트
-              await combatant.actor.update({
-                "system.conditions.action_delay.active": true
-              });
-              await this._rollInitiative(); // 이니셔티브 재굴림
-              await new Promise((resolve) => setTimeout(resolve, 50));
-              this._turnOrder(); // 다음 턴으로 이동
-            },
-          }
-        },
-        default: "endAction"
-      }).render(true);
-    }
-  }
-
+  
   // 다음 턴으로 이동
   async _turnOrder() {
     let sortedTurns = this.turns.filter(turn => {
@@ -223,17 +166,21 @@ export class DX3rdCombat extends Combat {
       if (!actor || !actor.system || !actor.system.conditions) {
         return false;
       }
-
+    
       let defeated = actor.system.conditions.defeated?.active;
       let end = actor.system.conditions.action_end?.active;
-      let alive = actor.system.attributes.hp.value > 0;
-
-      return !defeated && !end && alive;  // 행동 종료되지 않고, 생존한 캐릭터만 필터링
+      let isExceptional = actor.name === "[ Setup ]" || actor.name === "[ Cleanup ]";
+    
+      return !defeated && !end && !isExceptional;  // 행동 종료되지 않고, [ Setup ], [ Cleanup ]이 아닌 캐릭터만 필터링
     });
 
     // sortedTurns가 비어 있을 경우, 기본 턴 이동 처리
     if (sortedTurns.length === 0) {
-      super.nextTurn();
+      let cleanupTurn = this.turns.find(turn => turn.actor.name === "[ Cleanup ]");
+      if (cleanupTurn) {
+        let targetIndex = this.turns.findIndex((turn) => turn.id === cleanupTurn.id);
+        await this.update({ turn: targetIndex, turnOrder: this.turns });
+      }
       await new Promise((resolve) => setTimeout(resolve, 100));
       this.initiative()
     }
@@ -265,6 +212,123 @@ export class DX3rdCombat extends Combat {
 
       this.initiative()
     }
+  }  
+
+  async startCombat() {
+    // 먼저 모든 컴배턴트의 이니셔티브를 굴림
+    await this._dx3rdInitRoll();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // 이후 전투 시작을 진행
+    super.startCombat();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await this.countRounds()
+  }
+
+  async nextTurn() {
+    const combatant = this.turns[this.turn];
+
+    if (combatant.name === "[ Setup ]" || combatant.name === "[ Cleanup ]") {
+      // [setup] 또는 [cleanup]일 경우 바로 다음 턴으로 이동
+      super.nextTurn();
+      if (combatant.name === "[ Setup ]") {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        this.initiative()
+      }
+    } else if (combatant.actor.system.conditions.action_delay?.active) {
+      let thisCombatant = combatant;
+      let actor = thisCombatant.actor
+
+      let chatData = {
+        user: game.user.id,
+        speaker: ChatMessage.getSpeaker({ actor: actor }),
+        content: `${game.i18n.localize("DX3rd.ActionEnd")}: ${actor.name}`
+      };
+      ChatMessage.create(chatData);
+
+      // 행동 종료 상태 업데이트
+      await actor.update({
+        "system.conditions.action_end.active": true
+      });
+      await this.main_close_trigger()
+      await this._dx3rdInitRoll(); // 이니셔티브 재굴림
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      this._turnOrder(); // 다음 턴으로 이동
+    } else {
+      // 다이얼로그 생성
+      new Dialog({
+        title: "Turn End",
+        content: `
+        <p>${combatant.name}</p>
+      `,
+        buttons: {
+          endAction: {
+            label: game.i18n.localize("DX3rd.ActionEnd"),
+            callback: async () => {
+              let thisCombatant = combatant;
+              let actor = thisCombatant.actor
+
+              let chatData = {
+                user: game.user.id,
+                speaker: ChatMessage.getSpeaker({ actor: actor }),
+                content: `${game.i18n.localize("DX3rd.ActionEnd")}: ${actor.name}`
+              };
+              ChatMessage.create(chatData);
+
+              // 행동 종료 상태 업데이트
+              await actor.update({
+                "system.conditions.action_end.active": true
+              });
+              await this.main_close_trigger()
+              await this._dx3rdInitRoll(); // 이니셔티브 재굴림
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              this._turnOrder(); // 다음 턴으로 이동
+            },
+          },
+          delayAction: {
+            label: game.i18n.localize("DX3rd.ActionDelay"),
+            callback: async () => {
+
+              let thisCombatant = combatant;
+              let actor = thisCombatant.actor;
+
+              let chatData = {
+                user: game.user.id,
+                speaker: ChatMessage.getSpeaker({ actor: actor }),
+                content: `${game.i18n.localize("DX3rd.ActionDelay")}: ${actor.name}`
+              };
+              ChatMessage.create(chatData);
+
+              // 행동 대기 상태 업데이트
+              await actor.update({
+                "system.conditions.action_delay.active": true
+              });
+          
+              // 전투에 참여 중인 모든 액터들 중에서 액션 딜레이가 활성화된 액터 수 확인
+              let delayCount = this.combatants.filter(c => {
+                let actor = c.actor;
+                // 액터와 액터의 상태 확인
+                if (!actor || !actor.system || !actor.system.conditions) {
+                  return false;
+                }
+                return actor.system.conditions.action_delay?.active;
+              }).length;
+          
+              // 현재 전투원의 이니셔티브를 -N으로 업데이트
+              await thisCombatant.update({
+                initiative: -delayCount
+              });
+              await this.main_close_trigger()
+              // 이니셔티브 재굴림 및 턴 순서 정렬
+              await this._dx3rdInitRoll();
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              this._turnOrder(); // 다음 턴으로 이동
+            },
+          }
+        },
+        default: "endAction"
+      }).render(true);
+    }
   }
 
   async initiative() {
@@ -295,7 +359,7 @@ export class DX3rdCombat extends Combat {
       } else {
         this.startMainDialog();  // 메일 프로세스 실행
       }
-    }, 3000); // 3초 정도의 텀을 두고 다이얼로그 호출
+    }, 500); // 3초 정도의 텀을 두고 다이얼로그 호출
   }
 
   async startMainDialog() {
@@ -333,7 +397,7 @@ export class DX3rdCombat extends Combat {
               });
               break;
             case 2:
-              this._rollInitiative(); // 이니셔티브 재굴림
+              this._dx3rdInitRoll(); // 이니셔티브 재굴림
               new Promise((resolve) => setTimeout(resolve, 50));
               this._turnOrder(); // 다음 턴으로 이동
               break;
@@ -376,9 +440,10 @@ export class DX3rdCombat extends Combat {
                 content: message,
                 type: CONST.CHAT_MESSAGE_TYPES.IC,
               });
+              this.cleanup_trigger();
               break;
             case 2:
-              this._rollInitiative(); // 이니셔티브 재굴림
+              this._dx3rdInitRoll(); // 이니셔티브 재굴림
               new Promise((resolve) => setTimeout(resolve, 50));
               this._turnOrder(); // 다음 턴으로 이동
               break;
@@ -395,7 +460,7 @@ export class DX3rdCombat extends Combat {
   async previousTurn() {
     super.previousTurn();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    await this._rollInitiative(); // 이니셔티브 재굴림
+    await this._dx3rdInitRoll(); // 이니셔티브 재굴림
     await new Promise((resolve) => setTimeout(resolve, 50));
     this._turnOrder(); // 다음 턴으로 이동
   }
@@ -475,4 +540,175 @@ export class DX3rdCombat extends Combat {
     super.endCombat();
   }
 
+  /* -------------------------------------------- */	
+  // 메인 프로세스 종료 시 동작하는 효과들을 일괄적으로 처리하기 위한 기능 //
+  async main_close_trigger() {
+    this._lostHP();
+  }
+
+  // 클린업 프로세스 시 동작하는 효과들을 일괄적으로 처리하기 위한 기능 //
+  async cleanup_trigger() {
+    await this._dazed_off();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await this._taintedDamage();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await this._healingHP();
+  }
+
+  /* -------------------------------------------- */	
+
+  // 메인 프로세스 종료 시 HP 상실 효과 자동화 //
+  async _lostHP() {
+    let messages = []; // 메시지를 저장할 배열
+
+    for (let combatant of this.combatants) {
+      let actor = combatant.actor;
+
+      // lostHP 상태가 활성화되어 있는지 확인
+      if (actor.system.conditions.lostHP?.active && !actor.system.conditions.defeated?.active) {
+        let lostValue = Number(actor.system.conditions.lostHP?.value || 0);
+
+        // 현재 HP에서 lostHP 값을 빼기
+        let currentHP = actor.system.attributes.hp.value;
+        let afterHP = Math.max(currentHP - lostValue, 0);
+
+        let lostHP = currentHP - afterHP;
+
+        // 새로운 HP 값을 업데이트 (HP가 0 이하로 떨어지지 않도록 최소값을 0으로 설정)
+        await actor.update({ "system.attributes.hp.value": afterHP });
+
+        // HP를 잃었다는 메시지를 messages 배열에 저장
+        messages.push(`
+        <div>
+          <strong>${game.i18n.localize("DX3rd.LostHP")}</strong>: ${actor.name} (-${lostHP} HP)
+        </div>
+      `);
+
+        // lostHP 상태를 해제 (일회성으로 처리할 경우)
+        await actor.update({
+          "system.conditions.lostHP.active": false,
+          "system.conditions.lostHP.value": null
+        });
+      }
+    }
+
+    // 메시지 통합 후 한번에 출력
+    if (messages.length > 0) {
+      let messageContent = `
+      <div>
+        ${messages.join("<hr>")}  <!-- 각 컴배턴트의 메시지들을 구분선으로 묶어서 출력 -->
+      </div>
+    `;
+
+      ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+        content: messageContent,
+        type: CONST.CHAT_MESSAGE_TYPES.IC,
+      });
+    }
+  }
+
+  // 클린업 시 사독 데미지 효과 자동화 //
+  async _taintedDamage() {
+    let messages = []; // 메시지를 저장할 배열
+
+    for (let combatant of this.combatants) {
+      let actor = combatant.actor;
+
+      // lostHP 상태가 활성화되어 있는지 확인
+      if (actor.system.conditions.tainted?.active && !actor.system.conditions.defeated?.active) {
+        let taintedValue = (Number(actor.system.conditions.tainted?.value || 0) * 3);
+
+        // 현재 HP에서 lostHP 값을 빼기
+        let currentHP = actor.system.attributes.hp.value;
+        let afterHP = Math.max(currentHP - taintedValue, 0);
+
+        let lostHP = currentHP - afterHP;
+
+        // 새로운 HP 값을 업데이트 (HP가 0 이하로 떨어지지 않도록 최소값을 0으로 설정)
+        await actor.update({ "system.attributes.hp.value": afterHP });
+
+        // HP를 잃었다는 메시지를 messages 배열에 저장
+        messages.push(`
+          <div>
+            <strong>${game.i18n.localize("DX3rd.TaintedDamage")}</strong>: ${actor.name} (-${lostHP} HP)
+          </div>
+        `);
+      }
+    }
+
+    // 메시지 통합 후 한번에 출력
+    if (messages.length > 0) {
+      let messageContent = `
+        <div>
+          ${messages.join("<hr>")}  <!-- 각 컴배턴트의 메시지들을 구분선으로 묶어서 출력 -->
+        </div>
+      `;
+
+      ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+        content: messageContent,
+        type: CONST.CHAT_MESSAGE_TYPES.IC,
+      });
+    }
+  }
+
+  // 클린업 시 힐링 회복 효과 자동화 //
+  async _healingHP() {
+    let messages = []; // 메시지를 저장할 배열
+
+    for (let combatant of this.combatants) {
+      let actor = combatant.actor;
+
+      // lostHP 상태가 활성화되어 있는지 확인
+      if (actor.system.conditions.healing?.active && !actor.system.conditions.defeated?.active) {
+        let healingValue = Number(actor.system.conditions.healing?.value || 0);
+
+        // 현재 HP에서 lostHP 값을 빼기
+        let currentHP = actor.system.attributes.hp.value;
+        let maxHP = actor.system.attributes.hp.max;
+        let afterHP = Math.min(currentHP + healingValue, maxHP);
+
+        let getHP = afterHP - currentHP;
+
+        // 새로운 HP 값을 업데이트 (HP가 0 이하로 떨어지지 않도록 최소값을 0으로 설정)
+        await actor.update({ "system.attributes.hp.value": afterHP });
+
+        // HP를 잃었다는 메시지를 messages 배열에 저장
+        messages.push(`
+            <div>
+              <strong>${game.i18n.localize("DX3rd.Healing")}</strong>: ${actor.name} (+${getHP} HP)
+            </div>
+          `);
+      }
+    }
+
+    // 메시지 통합 후 한번에 출력
+    if (messages.length > 0) {
+      let messageContent = `
+          <div>
+            ${messages.join("<hr>")}  <!-- 각 컴배턴트의 메시지들을 구분선으로 묶어서 출력 -->
+          </div>
+        `;
+
+      ChatMessage.create({
+        speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+        content: messageContent,
+        type: CONST.CHAT_MESSAGE_TYPES.IC,
+      });
+    }
+  }
+
+  // 클린업 시 방심 회복 효과 자동화 //
+  async _dazed_off() {
+    for (let combatant of this.combatants) {
+      let actor = combatant.actor;
+      let condition = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === "dazed");
+      if (condition) {
+        await condition.delete();
+      }
+    }
+  }
+  
 }
+

@@ -239,6 +239,8 @@
   "DX3rd.SubAction0": "이펙트 사용 횟수 회복",
 
   "DX3rd.Condition": "상태이상",
+  "DX3rd.Apply": "적용",
+  "DX3rd.Clear": "해제",
 
   "DX3rd.Riger": "[경직]",
   "DX3rd.Pressure": "[중압]",
@@ -250,7 +252,7 @@
 
   "DX3rd.Normal": "통상",
 
-  "DX3rd.Mutation": "변이폭주",
+  "DX3rd.Mutation": "변이 폭주",
   "DX3rd.UrgeRelease": "해방",
   "DX3rd.UrgeHunger": "기아",
   "DX3rd.UrgeBloodsucking": "흡혈",
@@ -273,6 +275,7 @@
   "DX3rd.ActionDelay": "행동대기",
 
   "DX3rd.LostHP": "HP 상실",
+  "DX3rd.TaintedDamage": "사독 피해",
   "DX3rd.Healing": "힐링",
 
   "DX3rd.StealthCharacter": "은밀 캐릭터",

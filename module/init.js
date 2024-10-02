@@ -1346,19 +1346,34 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
               // 선택된 타입을 actor의 conditions에 업데이트
               if (selectedType === "selfmutilation") {
                 const currentHP = actor.system.attributes.hp.value;
-                const afterHP = currentHP - 5;
-                if (afterHP < 0) {
-                  afterHP === 0;
-                }
+                const afterHP = Math.max(currentHP - 5, 0);
+
+                let lostHP = currentHP - afterHP;
+
                 await actor.update({ "system.attributes.hp.value": afterHP })
-                const effect = actor.effects.find(e => e.data.label === `${game.i18n.localize("DX3rd.Berserk")}`);
+                const effect = actor.effects.find(e => e.data.flags?.dx3rd?.statusId === "berserk");
 
                 if (effect) {
                   // 'berserk' 상태가 이미 있을 경우 제거
                   await effect.delete();
                   console.log(`Removed berserk from token: ${actor.name}`);
                 }
-              } else if (selectedType === "fear") {
+
+                let content = `
+                <div>
+                  <strong>[${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeSelfmutilation")}] ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name} (-${lostHP} HP)
+                </div>
+                `
+
+                ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                  content: content,
+                  type: CONST.CHAT_MESSAGE_TYPES.IC,
+                });
+
+              } 
+              
+              else if (selectedType === "fear") {
                 await actor.update({
                   "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
                   "system.conditions.berserk.active": true         // 상태 활성화
@@ -1376,10 +1391,56 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
                 // 새로운 상태이상 적용
                 await actor.createEmbeddedDocuments("ActiveEffect", [effectData]);
                 console.log(`Applied berserk to token: ${actor.name}`);
-              } else {
+
+                let content = `
+                <div>
+                  <strong>[${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeFear")}] ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}
+                </div>
+                `
+
+                ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                  content: content,
+                  type: CONST.CHAT_MESSAGE_TYPES.IC,
+                });
+
+              } 
+              
+              else if (selectedType === "normal") {
                 await actor.update({
                   "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
                   "system.conditions.berserk.active": true         // 상태 활성화
+                });
+
+                let content = `
+                <div>
+                  <strong>${game.i18n.localize("DX3rd.Berserk")} ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}
+                </div>
+                `
+
+                ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                  content: content,
+                  type: CONST.CHAT_MESSAGE_TYPES.IC,
+                });
+              }              
+              else {
+                let label = `${game.i18n.localize(`DX3rd.Urge${selectedType.charAt(0).toUpperCase() + selectedType.slice(1)}`)}`;
+                await actor.update({
+                  "system.conditions.berserk.type": selectedType,  // 선택한 타입 저장
+                  "system.conditions.berserk.active": true         // 상태 활성화
+                });
+
+                let content = `
+                <div>
+                  <strong>[${game.i18n.localize("DX3rd.Mutation")}: ${label}] ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}
+                </div>
+                `
+
+                ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                  content: content,
+                  type: CONST.CHAT_MESSAGE_TYPES.IC,
                 });
               }
             }
@@ -1412,6 +1473,18 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
                 "system.conditions.tainted.value": inputValue,  // 입력값 저장
                 "system.conditions.tainted.active": true        // 상태 활성화
               });
+
+              let content = `
+                <div>
+                  <strong>${game.i18n.localize("DX3rd.Tainted")} ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name} (Rank: ${inputValue})
+                </div>
+                `
+
+                ChatMessage.create({
+                  speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                  content: content,
+                  type: CONST.CHAT_MESSAGE_TYPES.IC,
+                });
             }
           },
           cancel: {
@@ -1455,6 +1528,17 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
               await actor.update({
                 "system.conditions.hatred.target": selectedTokenName,  // 선택한 토큰 이름 저장
                 "system.conditions.hatred.active": true                // 상태 활성화
+              });
+              let content = `
+              <div>
+                <strong>${game.i18n.localize("DX3rd.Hatred")} ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}<br>(${game.i18n.localize("DX3rd.Target")}: ${selectedTokenName})
+              </div>
+              `
+
+              ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                content: content,
+                type: CONST.CHAT_MESSAGE_TYPES.IC,
               });
             }
           },
@@ -1500,6 +1584,17 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
                 "system.conditions.fear.target": selectedTokenName,  // 선택한 토큰 이름 저장
                 "system.conditions.fear.active": true                // 상태 활성화
               });
+              let content = `
+              <div>
+                <strong>${game.i18n.localize("DX3rd.Fear")} ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}<br>(${game.i18n.localize("DX3rd.Target")}: ${selectedTokenName})
+              </div>
+              `
+
+              ChatMessage.create({
+                speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+                content: content,
+                type: CONST.CHAT_MESSAGE_TYPES.IC,
+              });
             }
           },
           cancel: {
@@ -1517,6 +1612,19 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
   else {
     await actor.update({
       [`system.conditions.${condition}.active`]: true
+    });
+    let label = `${game.i18n.localize(`DX3rd.${condition.charAt(0).toUpperCase() + condition.slice(1)}`)}`;
+
+    let content = `
+    <div>
+      <strong>${label} ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}
+    </div>
+    `
+
+    ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+      content: content,
+      type: CONST.CHAT_MESSAGE_TYPES.IC,
     });
   }
 });
@@ -1537,6 +1645,18 @@ Hooks.on("deleteActiveEffect", async (effect) => {
     if (effect) {
       await effect.delete();
     }
+
+    let content = `
+    <div>
+      <strong>${game.i18n.localize("DX3rd.Berserk")} ${game.i18n.localize("DX3rd.Clear")}</strong>: ${actor.name}
+    </div>
+    `
+
+    ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+      content: content,
+      type: CONST.CHAT_MESSAGE_TYPES.IC,
+    });
   }
 
   // 상태이상의 label이 "DX3rd.Tainted"인 경우에만 처리
@@ -1565,6 +1685,18 @@ Hooks.on("deleteActiveEffect", async (effect) => {
     if (effect) {
       await effect.delete();
     }
+
+    let content = `
+    <div>
+      <strong>${game.i18n.localize("DX3rd.Hatred")} ${game.i18n.localize("DX3rd.Clear")}</strong>: ${actor.name}
+    </div>
+    `
+
+    ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+      content: content,
+      type: CONST.CHAT_MESSAGE_TYPES.IC,
+    });
   }
 
   // 상태이상의 label이 "DX3rd.Fear"인 경우에만 처리
@@ -1579,6 +1711,18 @@ Hooks.on("deleteActiveEffect", async (effect) => {
     if (effect) {
       await effect.delete();
     }
+
+    let content = `
+    <div>
+      <strong>${game.i18n.localize("DX3rd.Fear")} ${game.i18n.localize("DX3rd.Clear")}</strong>: ${actor.name}
+    </div>
+    `
+
+    ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+      content: content,
+      type: CONST.CHAT_MESSAGE_TYPES.IC,
+    });
   }
 
   // 나머지 상태이상 처리
@@ -1591,5 +1735,19 @@ Hooks.on("deleteActiveEffect", async (effect) => {
     if (effect) {
       await effect.delete();
     }
+
+    let label = `${game.i18n.localize(`DX3rd.${condition.charAt(0).toUpperCase() + condition.slice(1)}`)}`;
+
+    let content = `
+    <div>
+      <strong>${label} ${game.i18n.localize("DX3rd.Clear")}</strong>: ${actor.name}
+    </div>
+    `
+
+    ChatMessage.create({
+      speaker: ChatMessage.getSpeaker({ alias: "GM" }), // GM으로 설정
+      content: content,
+      type: CONST.CHAT_MESSAGE_TYPES.IC,
+    });
   }
 });
