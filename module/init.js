@@ -37,7 +37,8 @@ Hooks.once("init", async function () {
     icon: "icons/svg/pawprint.svg",
     disabled: false,
     duration: { rounds: 9999 },
-    flags: { "dx3rd": { statusId: "berserk" } }
+    flags: { "dx3rd": { statusId: "berserk" } },
+    changes: []
   });
 
   CONFIG.statusEffects.push({
@@ -1379,19 +1380,6 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
                   "system.conditions.berserk.active": true         // 상태 활성화
                 });
 
-                const effectData = {
-                  id: "riger",
-                  label: game.i18n.localize("DX3rd.Riger"),
-                  icon: "icons/svg/lightning.svg", // 아이콘 경로
-                  disabled: false,
-                  duration: { rounds: 9999 }, // 지속 시간 설정 (라운드 단위)
-                  flags: { "dx3rd": { statusId: "riger" } }
-                };
-
-                // 새로운 상태이상 적용
-                await actor.createEmbeddedDocuments("ActiveEffect", [effectData]);
-                console.log(`Applied berserk to token: ${actor.name}`);
-
                 let content = `
                 <div>
                   <strong>[${game.i18n.localize("DX3rd.Mutation")}: ${game.i18n.localize("DX3rd.UrgeFear")}] ${game.i18n.localize("DX3rd.Apply")}</strong>: ${actor.name}
@@ -1404,6 +1392,14 @@ Hooks.on("createActiveEffect", async (effect, options, userId) => {
                   type: CONST.CHAT_MESSAGE_TYPES.IC,
                 });
 
+                const token = actor.getActiveTokens()[0] || null;
+
+                const riger = CONFIG.statusEffects.find(e => e.id === "riger");
+                if (riger) {
+                  await token.toggleEffect(riger);
+                }
+
+                console.log(`Applied berserk to token: ${actor.name}`);
               } 
               
               else if (selectedType === "normal") {
