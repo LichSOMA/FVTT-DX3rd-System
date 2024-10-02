@@ -359,7 +359,7 @@ export class DX3rdCombat extends Combat {
       } else {
         this.startMainDialog();  // 메일 프로세스 실행
       }
-    }, 500); // 3초 정도의 텀을 두고 다이얼로그 호출
+    }, 2000); // 2초 정도의 텀을 두고 다이얼로그 호출
   }
 
   async startMainDialog() {
@@ -386,7 +386,7 @@ export class DX3rdCombat extends Combat {
                   ${game.i18n.localize("DX3rd.Main")} ${game.i18n.localize("DX3rd.Process")}
                 </div></h2><hr>
                 <div class="context-box">
-                  ${game.i18n.localize("DX3rd.InitiativeCharacter")}: ${this.combatant.name}
+                  ${game.i18n.localize("DX3rd.MainCharacter")}: ${this.combatant.name}
                 </div>
               </div>
             `
@@ -509,7 +509,9 @@ export class DX3rdCombat extends Combat {
     // 기본 라운드 이동 처리 호출
     super.nextRound();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    await this.countRounds()
+    await this.countRounds();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await this._dx3rdInitRoll();
   }
 
   //전투 종료 시 기능//
@@ -543,7 +545,7 @@ export class DX3rdCombat extends Combat {
   /* -------------------------------------------- */	
   // 메인 프로세스 종료 시 동작하는 효과들을 일괄적으로 처리하기 위한 기능 //
   async main_close_trigger() {
-    this._lostHP();
+    await this._lostHP();
   }
 
   // 클린업 프로세스 시 동작하는 효과들을 일괄적으로 처리하기 위한 기능 //
@@ -709,6 +711,6 @@ export class DX3rdCombat extends Combat {
       }
     }
   }
-  
 }
+
 
