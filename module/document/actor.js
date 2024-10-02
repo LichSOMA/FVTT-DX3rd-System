@@ -14,71 +14,6 @@ export class DX3rdActor extends Actor {
     this._prepareActorSkills();
 
     this._prepareCombo();
-
-    this._prepareCondition();
-  }
-
-  _prepareCondition(){
-    if (!this.system.conditions) {
-      this.system.conditions = {
-        tainted: { value: "" },  // 객체로 정의
-        hatred: { target: "" },  // 객체로 정의
-        fear: { target: "" },    // 객체로 정의
-        berserk: { type: "-" }, // 객체로 정의
-
-        riger: false,
-        pressure: false,
-        dazed: false,
-
-        defeated: false,
-        action_end: false,
-        action_delay: false,
-        stealth: false,
-
-        lostHP: { value: "" },  // 객체로 정의
-        healing: { value: "" }  // 객체로 정의
-      };
-    }
-  
-    // boolean 상태와 객체 상태를 분리해서 관리
-    const conditions = this.system.conditions;
-  
-    // boolean 상태들은 false로 초기화
-    
-    conditions.riger = conditions.riger ?? false;
-    conditions.pressure = conditions.pressure ?? false;
-    conditions.dazed = conditions.dazed ?? false;
-
-    conditions.defeated = conditions.defeated ?? false;
-    conditions.action_end = conditions.action_end ?? false;
-    conditions.action_delay = conditions.action_delay ?? false;
-
-    conditions.stealth = conditions.stealth ?? false;
-  
-    // 객체 상태들은 올바르게 초기화
-    if (typeof conditions.tainted === "boolean") {
-      conditions.tainted = { value: "" }; // boolean 값이라면 객체로 변경
-    }
-  
-    if (typeof conditions.hatred === "boolean") {
-      conditions.hatred = { target: "" }; // boolean 값이라면 객체로 변경
-    }
-  
-    if (typeof conditions.fear === "boolean") {
-      conditions.fear = { target: "" }; // boolean 값이라면 객체로 변경
-    }
-  
-    if (typeof conditions.berserk === "boolean") {
-      conditions.berserk = { type: "-" }; // boolean 값이라면 객체로 변경
-    }
-
-    if (typeof conditions.lostHP === "boolean") {
-      conditions.lostHP = { value: "" }; // boolean 값이라면 객체로 변경
-    }
-
-    if (typeof conditions.healing === "boolean") {
-      conditions.healing = { value: "" }; // boolean 값이라면 객체로 변경
-    }
   }
 
   _prepareActorItem() {
@@ -149,6 +84,74 @@ export class DX3rdActor extends Actor {
     attributes.stock_point = values.stock_point;
     //
 
+    // 승화 처리를 위해 추가된 attributes
+    attributes.sublimation_casting_dice = attributes.sublimation_casting_dice || { value: 0 };
+    attributes.sublimation_damage_roll = attributes.sublimation_damage_roll || { value: 0 };
+
+    // 상태이상 관련 //
+
+    if (!this.system.conditions) {
+      this.system.conditions = {
+        tainted: { value: "" },  // 객체로 정의
+        hatred: { target: "" },  // 객체로 정의
+        fear: { target: "" },    // 객체로 정의
+        berserk: { type: "-" }, // 객체로 정의
+
+        riger: false,
+        pressure: false,
+        dazed: false,
+
+        defeated: false,
+        action_end: false,
+        action_delay: false,
+        stealth: false,
+
+        lostHP: { value: "" },  // 객체로 정의
+        healing: { value: "" }  // 객체로 정의
+      };
+    }
+  
+    // boolean 상태와 객체 상태를 분리해서 관리
+    const conditions = this.system.conditions;
+  
+    // boolean 상태들은 false로 초기화
+    
+    conditions.riger = conditions.riger ?? false;
+    conditions.pressure = conditions.pressure ?? false;
+    conditions.dazed = conditions.dazed ?? false;
+
+    conditions.defeated = conditions.defeated ?? false;
+    conditions.action_end = conditions.action_end ?? false;
+    conditions.action_delay = conditions.action_delay ?? false;
+
+    conditions.stealth = conditions.stealth ?? false;
+  
+    // 객체 상태들은 올바르게 초기화
+    if (typeof conditions.tainted === "boolean") {
+      conditions.tainted = { value: "" }; // boolean 값이라면 객체로 변경
+    }
+  
+    if (typeof conditions.hatred === "boolean") {
+      conditions.hatred = { target: "" }; // boolean 값이라면 객체로 변경
+    }
+  
+    if (typeof conditions.fear === "boolean") {
+      conditions.fear = { target: "" }; // boolean 값이라면 객체로 변경
+    }
+  
+    if (typeof conditions.berserk === "boolean") {
+      conditions.berserk = { type: "-" };  // boolean 값이라면 객체로 변경
+    }
+
+    if (typeof conditions.lostHP === "boolean") {
+      conditions.lostHP = { value: "" }; // boolean 값이라면 객체로 변경
+    }
+
+    if (typeof conditions.healing === "boolean") {
+      conditions.healing = { value: "" }; // boolean 값이라면 객체로 변경
+    }
+
+    
     // 상태이상 처리를 위해 추가된 attributes //
     attributes.condition_dice = 0;
     if (this.system.conditions.dazed?.active) {
@@ -158,10 +161,7 @@ export class DX3rdActor extends Actor {
       attributes.condition_dice += 5;
     }
 
-    // 승화 처리를 위해 추가된 attributes
-    attributes.sublimation_casting_dice = attributes.sublimation_casting_dice || { value: 0 };
-    attributes.sublimation_damage_roll = attributes.sublimation_damage_roll || { value: 0 };
-
+    //
     let skills = attributes.skills;
     for (const [key, value] of Object.entries(skills)) {
       skills[key].value = parseInt(skills[key].point);
