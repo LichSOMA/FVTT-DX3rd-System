@@ -494,6 +494,9 @@ export class DX3rdCombat extends Combat {
       content: content,
       type: CONST.CHAT_MESSAGE_TYPES.IC,
     });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await this.setup_trigger();
   }
 
   //라운드 종료 시 기능//
@@ -543,6 +546,12 @@ export class DX3rdCombat extends Combat {
   }
 
   /* -------------------------------------------- */	
+
+  // 셋업 프로세스 시 동작하는 효과들을 일괄적으로 처리하기 위한 기능 //
+  async setup_trigger() {
+    await this._trigger_macros_setup();
+  }
+
   // 메인 프로세스 종료 시 동작하는 효과들을 일괄적으로 처리하기 위한 기능 //
   async main_close_trigger() {
     await this._lostHP();
@@ -555,9 +564,25 @@ export class DX3rdCombat extends Combat {
     await this._taintedDamage();
     await new Promise((resolve) => setTimeout(resolve, 50));
     await this._healingHP();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await this._trigger_macros_cleanup()
   }
 
   /* -------------------------------------------- */	
+
+  // 셋업 시 "trigger_setup_"으로 시작하는 매크로를 호출 //
+  async _trigger_macros_setup() {
+    // 모든 매크로를 가져옴
+    const macros = game.macros;
+
+    // "trigger_setup_"으로 시작하는 매크로 필터링
+    const cleanupMacros = macros.filter(macro => macro.name.startsWith("trigger_setup_"));
+
+    // 매크로 실행
+    for (let macro of cleanupMacros) {
+      await macro.execute();
+    }
+  }
 
   // 메인 프로세스 종료 시 HP 상실 효과 자동화 //
   async _lostHP() {
@@ -709,6 +734,20 @@ export class DX3rdCombat extends Combat {
       if (condition) {
         await condition.delete();
       }
+    }
+  }
+
+  // 클린업 시 "trigger_cleanup_"으로 시작하는 매크로를 호출 //
+  async _trigger_macros_cleanup() {
+    // 모든 매크로를 가져옴
+    const macros = game.macros;
+
+    // "trigger_cleanup_"으로 시작하는 매크로 필터링
+    const cleanupMacros = macros.filter(macro => macro.name.startsWith("trigger_cleanup_"));
+
+    // 매크로 실행
+    for (let macro of cleanupMacros) {
+      await macro.execute();
     }
   }
 }
